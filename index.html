@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEO Report</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="brand-title" id="brand-title">SEO Report</div>
+  <div class="header-controls">
+    <div class="brand-tabs" id="brand-tabs">
+      <button data-brand="anzo" class="active">Anzo</button>
+      <button data-brand="dlsm">DLSM</button>
+    </div>
+    <div class="month-picker">
+      <label for="month-current">Month</label>
+      <select id="month-current"></select>
+      <label for="month-compare">vs.</label>
+      <select id="month-compare"></select>
+    </div>
+  </div>
+  <div class="meta-line" id="meta-line">Loading&hellip;</div>
+</header>
+
+<div class="container">
+
+  <section>
+    <div class="section-head">
+      <h2>Executive summary</h2>
+      <span class="section-note" id="period-note"></span>
+    </div>
+    <div class="kpi-row" id="kpi-row"></div>
+    <div class="kpi-row" id="kpi-row-ga4" style="margin-top:16px;"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Branded vs. non-branded</h2>
+      <span class="section-note">Share of total clicks</span>
+    </div>
+    <div id="split-section"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Top keyword movers</h2>
+      <span class="section-note">Biggest click changes between the two selected months</span>
+    </div>
+    <div id="movers-table"></div>
+  </section>
+
+  <section>
+    <div class="two-col">
+      <div>
+        <div class="section-head"><h2>Branded keywords</h2></div>
+        <div id="branded-table"></div>
+      </div>
+      <div>
+        <div class="section-head"><h2>Non-branded keywords</h2></div>
+        <div id="nonbranded-table"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Top pages by clicks</h2></div>
+    <div id="pages-table"></div>
+  </section>
+
+  <section>
+    <div class="two-col">
+      <div>
+        <div class="section-head"><h2>Top countries</h2></div>
+        <div id="countries-table"></div>
+      </div>
+      <div>
+        <div class="section-head"><h2>Device split</h2></div>
+        <div id="device-split"></div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
