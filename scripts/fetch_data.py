@@ -150,6 +150,24 @@ def ga4_totals(client, property_id, start, end):
     return {"sessions": sessions, "activeUsers": active_users, "conversions": conversions}
 
 
+def ga4_daily_sessions(client, property_id, start, end):
+    request = RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start.isoformat(), end_date=end.isoformat())],
+        dimensions=[Dimension(name="date"), Dimension(name="country")],
+        metrics=[Metric(name="sessions")],
+    )
+    resp = client.run_report(request)
+    by_date = {}
+    for row in resp.rows:
+        if row.dimension_values[1].value in EXCLUDE_GA4_COUNTRIES:
+            continue
+        raw_d = row.dimension_values[0].value  # GA4 returns YYYYMMDD
+        iso_d = f"{raw_d[0:4]}-{raw_d[4:6]}-{raw_d[6:8]}"
+        by_date[iso_d] = by_date.get(iso_d, 0) + int(row.metric_values[0].value)
+    return by_date
+
+
 # ---------------------------------------------------------------------------
 # Per-month snapshot
 # ---------------------------------------------------------------------------
@@ -169,6 +187,7 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
     qc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["query", "country"], start, end))
     pc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["page", "country"], start, end))
     dc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["device", "country"], start, end))
+    tc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["date", "country"], start, end))
 
     summary = summarize(qc)
 
@@ -187,6 +206,20 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
     countries = sorted(group_by(qc, "country"), key=lambda r: r["clicks"], reverse=True)[:TOP_N_COUNTRIES]
     devices = sorted(group_by(dc, "device"), key=lambda r: r["clicks"], reverse=True)
 
+    # --- Daily series (for the trend chart) ---
+    daily_gsc = sorted(group_by(tc, "date"), key=lambda r: r["date"])
+    ga4_daily = ga4_daily_sessions(ga4_client, brand["ga4_property_id"], start, end)
+    daily = []
+    for row in daily_gsc:
+        daily.append({
+            "date": row["date"],  # Search Console already returns YYYY-MM-DD
+            "clicks": row["clicks"],
+            "impressions": row["impressions"],
+            "ctr": row["ctr"],
+            "position": row["position"],
+            "sessions": ga4_daily.get(row["date"], 0),
+        })
+
     ga4 = ga4_totals(ga4_client, brand["ga4_property_id"], start, end)
 
     return {
@@ -204,6 +237,7 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
         "pages": pages,
         "countries": countries,
         "devices": devices,
+        "daily": daily,
         "ga4": ga4,
     }
 
