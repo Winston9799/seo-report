@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SEO Report</title>
 <link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -26,6 +27,21 @@
 </header>
 
 <div class="container">
+
+  <section style="margin-top:32px;">
+    <div class="section-head">
+      <h2>Trend</h2>
+      <select id="metric-select" class="month-picker-inline">
+        <option value="clicks">Clicks</option>
+        <option value="impressions">Impressions</option>
+        <option value="sessions">Sessions (GA4)</option>
+        <option value="position">Position</option>
+      </select>
+    </div>
+    <div style="background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px;">
+      <canvas id="trend-chart" height="90"></canvas>
+    </div>
+  </section>
 
   <section>
     <div class="section-head">
