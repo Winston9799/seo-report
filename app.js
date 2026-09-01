@@ -225,6 +225,75 @@ function showEmptyState(brandLabel) {
     </div>`;
 }
 
+// ---------------------------------------------------------------------------
+// Trend chart (daily, current month vs. compare month, aligned by day-of-month)
+// ---------------------------------------------------------------------------
+
+let trendChart = null;
+
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function renderTrendChart(curr, comp) {
+  const metric = document.getElementById("metric-select").value;
+  const currDaily = curr.daily || [];
+  const compDaily = comp.daily || [];
+  const maxDays = Math.max(currDaily.length, compDaily.length, 1);
+  const labels = Array.from({ length: maxDays }, (_, i) => `Day ${i + 1}`);
+
+  const currValues = labels.map((_, i) => (currDaily[i] ? currDaily[i][metric] : null));
+  const compValues = labels.map((_, i) => (compDaily[i] ? compDaily[i][metric] : null));
+
+  const accent = cssVar("--accent");
+  const muted = cssVar("--muted");
+
+  const ctx = document.getElementById("trend-chart").getContext("2d");
+  const data = {
+    labels,
+    datasets: [
+      {
+        label: `${curr.label} (${metric})`,
+        data: currValues,
+        borderColor: accent,
+        backgroundColor: accent,
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.25,
+      },
+      {
+        label: `${comp.label} (${metric})`,
+        data: compValues,
+        borderColor: muted,
+        backgroundColor: muted,
+        borderWidth: 2,
+        borderDash: [4, 3],
+        pointRadius: 0,
+        tension: 0.25,
+      },
+    ],
+  };
+
+  if (trendChart) {
+    trendChart.data = data;
+    trendChart.update();
+  } else {
+    trendChart = new Chart(ctx, {
+      type: "line",
+      data,
+      options: {
+        responsive: true,
+        interaction: { mode: "index", intersect: false },
+        scales: {
+          y: { beginAtZero: metric !== "position" },
+          x: { ticks: { maxTicksLimit: 10 } },
+        },
+        plugins: { legend: { position: "bottom", labels: { boxWidth: 12 } } },
+      },
+    });
+  }
+}
+
 function renderAll() {
   const currIdx = Number(document.getElementById("month-current").value);
   const compIdx = Number(document.getElementById("month-compare").value);
@@ -232,6 +301,7 @@ function renderAll() {
   const comp = months[compIdx];
   if (!curr || !comp) return;
 
+  renderTrendChart(curr, comp);
   renderSummary(curr, comp);
   renderSplit(curr);
   renderMovers(curr, comp);
@@ -282,5 +352,6 @@ document.getElementById("brand-tabs").addEventListener("click", (e) => {
 
 document.getElementById("month-current").addEventListener("change", renderAll);
 document.getElementById("month-compare").addEventListener("change", renderAll);
+document.getElementById("metric-select").addEventListener("change", renderAll);
 
 renderBrand(currentBrand);
