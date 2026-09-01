@@ -5,13 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SEO Report</title>
 <link rel="stylesheet" href="style.css">
+
+<!-- Real, freely-licensed fallback font (covers Latin + Chinese characters).
+     style.css tries your actual HarmonyOS Sans SC / PingFangSC files first,
+     via /font/... — this only kicks in if those aren't present. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+<!-- Charting library used only by the Trend chart (app.js) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
+<!-- ================================================================
+     PASSWORD GATE
+     Shown on load; app.js hides this and reveals #report-root once the
+     correct passphrase is entered. Light deterrent only — see the
+     REPORT_PASSWORD comment in app.js for the honest limitations.
+     ================================================================ -->
 <div id="password-gate" class="password-gate">
   <div class="password-box">
     <div class="password-title">SEO Report</div>
@@ -22,15 +34,26 @@
   </div>
 </div>
 
+<!-- Everything below is hidden until the password gate above is passed. -->
 <div id="report-root" style="display:none;">
 
+<!-- ================================================================
+     HEADER — brand switcher, and the two ways to pick a comparison period
+     (Month vs. Month, or Day vs. Day). app.js shows/hides #month-controls
+     vs. #day-controls based on the #compare-mode dropdown.
+     ================================================================ -->
 <header>
   <div class="brand-title" id="brand-title">SEO Report</div>
   <div class="header-controls">
+
+    <!-- Anzo / DLSM toggle — clicking a button re-colors the whole page
+         (via --accent) and reloads that brand's data/<brand>.json -->
     <div class="brand-tabs" id="brand-tabs">
       <button data-brand="anzo" class="active">Anzo</button>
       <button data-brand="dlsm">DLSM</button>
     </div>
+
+    <!-- Month vs. Day toggle -->
     <div class="month-picker">
       <label for="compare-mode">Compare by</label>
       <select id="compare-mode" class="month-picker-inline">
@@ -38,17 +61,23 @@
         <option value="day">Day</option>
       </select>
     </div>
+
+    <!-- Shown when Compare-by = Month. Populated by populateMonthPickers() in app.js. -->
     <div class="month-picker" id="month-controls">
       <label for="month-current">Month</label>
-      <select id="month-current"></select>
+      <select id="month-current"><option>Loading…</option></select>
       <label for="month-compare">vs.</label>
-      <select id="month-compare"></select>
+      <select id="month-compare"><option>Loading…</option></select>
     </div>
+
+    <!-- Shown when Compare-by = Day. Only offers dates that have full
+         daily_detail archived (recent months only — see fetch_data.py).
+         Populated by populateDayPickers() in app.js. -->
     <div class="month-picker" id="day-controls" style="display:none;">
       <label for="day-current">Day</label>
-      <select id="day-current"></select>
+      <select id="day-current"><option>Loading…</option></select>
       <label for="day-compare">vs.</label>
-      <select id="day-compare"></select>
+      <select id="day-compare"><option>Loading…</option></select>
     </div>
   </div>
   <div class="meta-line" id="meta-line">Loading&hellip;</div>
@@ -56,6 +85,12 @@
 
 <div class="container">
 
+  <!-- ================================================================
+       TREND CHART
+       Always plots full months of daily data (see renderTrendChart in
+       app.js for why it doesn't try to show a single day's "trend").
+       The dropdown swaps which metric the two lines plot.
+       ================================================================ -->
   <section style="margin-top:32px;">
     <div class="section-head">
       <h2>Trend</h2>
@@ -71,6 +106,11 @@
     </div>
   </section>
 
+  <!-- ================================================================
+       EXECUTIVE SUMMARY
+       Two rows of KPI tiles: Search Console totals, then GA4 totals.
+       Filled in by renderSummary() in app.js.
+       ================================================================ -->
   <section>
     <div class="section-head">
       <h2>Executive summary</h2>
@@ -80,6 +120,10 @@
     <div class="kpi-row" id="kpi-row-ga4" style="margin-top:16px;"></div>
   </section>
 
+  <!-- ================================================================
+       BRANDED VS. NON-BRANDED SPLIT
+       Current period only (not a comparison) — filled in by renderSplit().
+       ================================================================ -->
   <section>
     <div class="section-head">
       <h2>Branded vs. non-branded</h2>
@@ -88,6 +132,11 @@
     <div id="split-section"></div>
   </section>
 
+  <!-- ================================================================
+       VISIBILITY DISTRIBUTION
+       What % of tracked keywords rank Top 3 / 4-10 / 11-20 / 21+.
+       Filled in by renderPositionDistribution().
+       ================================================================ -->
   <section>
     <div class="section-head">
       <h2>Visibility distribution</h2>
@@ -96,6 +145,11 @@
     <div id="position-distribution"></div>
   </section>
 
+  <!-- ================================================================
+       CTR OPPORTUNITIES
+       Queries underperforming a typical CTR-by-position benchmark.
+       Filled in by renderCtrOpportunities().
+       ================================================================ -->
   <section>
     <div class="section-head">
       <h2>CTR opportunities</h2>
@@ -104,6 +158,11 @@
     <div id="ctr-opportunities-table"></div>
   </section>
 
+  <!-- ================================================================
+       TOP KEYWORD MOVERS
+       Union of both periods' keywords (includes New/Lost), sortable +
+       searchable. Filled in by renderMovers().
+       ================================================================ -->
   <section>
     <div class="section-head">
       <h2>Top keyword movers</h2>
@@ -112,6 +171,10 @@
     <div id="movers-table"></div>
   </section>
 
+  <!-- ================================================================
+       BRANDED / NON-BRANDED KEYWORD TABLES (side by side)
+       Filled in by renderKeywordSplitTables().
+       ================================================================ -->
   <section>
     <div class="two-col">
       <div>
@@ -125,8 +188,19 @@
     </div>
   </section>
 
+  <!-- ================================================================
+       PAGES BY CATEGORY
+       Entirely built by renderPagesByCategory() in app.js — one <section>
+       per page category (Blog, Market Analysis, Notifications, Help
+       Centre, Static Pages), each with two side-by-side tables. This div
+       is just the empty container; nothing static goes here.
+       ================================================================ -->
   <div id="pages-by-category"></div>
 
+  <!-- ================================================================
+       TOP COUNTRIES / DEVICE SPLIT (side by side)
+       Filled in by renderCountries() and renderDeviceSplit().
+       ================================================================ -->
   <section>
     <div class="two-col">
       <div>
@@ -142,7 +216,7 @@
 
 </div>
 
-</div>
+</div><!-- /#report-root -->
 
 <script src="app.js"></script>
 </body>
