@@ -5,9 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SEO Report</title>
 <link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
+
+<div id="password-gate" class="password-gate">
+  <div class="password-box">
+    <div class="password-title">SEO Report</div>
+    <p class="password-copy">Enter the passphrase to view this report.</p>
+    <input type="password" id="password-input" class="password-input" placeholder="Passphrase" autofocus>
+    <button id="password-submit" class="password-submit">Unlock</button>
+    <p class="password-error" id="password-error" style="display:none;">Incorrect passphrase — try again.</p>
+  </div>
+</div>
+
+<div id="report-root" style="display:none;">
 
 <header>
   <div class="brand-title" id="brand-title">SEO Report</div>
@@ -17,10 +32,23 @@
       <button data-brand="dlsm">DLSM</button>
     </div>
     <div class="month-picker">
+      <label for="compare-mode">Compare by</label>
+      <select id="compare-mode" class="month-picker-inline">
+        <option value="month">Month</option>
+        <option value="day">Day</option>
+      </select>
+    </div>
+    <div class="month-picker" id="month-controls">
       <label for="month-current">Month</label>
       <select id="month-current"></select>
       <label for="month-compare">vs.</label>
       <select id="month-compare"></select>
+    </div>
+    <div class="month-picker" id="day-controls" style="display:none;">
+      <label for="day-current">Day</label>
+      <select id="day-current"></select>
+      <label for="day-compare">vs.</label>
+      <select id="day-compare"></select>
     </div>
   </div>
   <div class="meta-line" id="meta-line">Loading&hellip;</div>
@@ -62,8 +90,24 @@
 
   <section>
     <div class="section-head">
+      <h2>Visibility distribution</h2>
+      <span class="section-note" id="distribution-note"></span>
+    </div>
+    <div id="position-distribution"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>CTR opportunities</h2>
+      <span class="section-note">Queries getting fewer clicks than typical for their position</span>
+    </div>
+    <div id="ctr-opportunities-table"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
       <h2>Top keyword movers</h2>
-      <span class="section-note">Biggest click changes between the two selected months</span>
+      <span class="section-note">Search or sort — click a column header</span>
     </div>
     <div id="movers-table"></div>
   </section>
@@ -81,10 +125,7 @@
     </div>
   </section>
 
-  <section>
-    <div class="section-head"><h2>Top pages by clicks</h2></div>
-    <div id="pages-table"></div>
-  </section>
+  <div id="pages-by-category"></div>
 
   <section>
     <div class="two-col">
@@ -98,6 +139,8 @@
       </div>
     </div>
   </section>
+
+</div>
 
 </div>
 
