@@ -27,14 +27,14 @@ BRANDS = [
     {
         "label": "Anzo",
         "color": "#b22333",
-        "ga4_property_id": "REPLACE_WITH_ANZO_GA4_PROPERTY_ID",
+        "ga4_property_id": "480686179",
         "gsc_site_url": "sc-domain:anzocapital.com",
         "brand_keyword": "anzo capital",   # any query containing this = branded
     },
     {
         "label": "DLSM",
         "color": "#0156fc",
-        "ga4_property_id": "REPLACE_WITH_DLSM_GA4_PROPERTY_ID",
+        "ga4_property_id": "474006416",
         "gsc_site_url": "sc-domain:dlsm.com",
         "brand_keyword": "dlsm",
     },
