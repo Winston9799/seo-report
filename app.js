@@ -871,11 +871,21 @@ function renderDeviceSplit(curr) {
 
 // Replaces the whole report with a plain message when a brand has no data
 // yet (e.g. right after setup, before the first Action run has completed).
+// Also resets the header's period pickers to a neutral "no data" state so
+// they don't sit there showing stale options from a previously-loaded brand.
 function showEmptyState(brandLabel) {
   document.querySelector(".container").innerHTML = `
     <div class="empty-state">
       No data yet for ${brandLabel}. Once the daily GitHub Action runs (or you trigger it manually from the Actions tab), this page will populate automatically.
     </div>`;
+
+  ["month-current", "month-compare", "day-current", "day-compare"].forEach(id => {
+    const el = document.getElementById(id);
+    el.innerHTML = `<option>No data yet</option>`;
+    el.disabled = true;
+  });
+  document.getElementById("period-note").textContent = "";
+  document.getElementById("meta-line").textContent = `No data yet for ${brandLabel}`;
 }
 
 // The main re-render entry point — called whenever ANY control changes
@@ -927,6 +937,8 @@ function renderAll() {
 function populateMonthPickers() {
   const currentSel = document.getElementById("month-current");
   const compareSel = document.getElementById("month-compare");
+  currentSel.disabled = false;
+  compareSel.disabled = false;
   const options = months.map((m, i) => `<option value="${i}">${m.label}</option>`).join("");
   currentSel.innerHTML = options;
   compareSel.innerHTML = options;
@@ -941,6 +953,8 @@ function populateDayPickers() {
   const days = listAvailableDays();
   const currentSel = document.getElementById("day-current");
   const compareSel = document.getElementById("day-compare");
+  currentSel.disabled = false;
+  compareSel.disabled = false;
   if (days.length === 0) {
     currentSel.innerHTML = `<option value="">No daily detail yet</option>`;
     compareSel.innerHTML = currentSel.innerHTML;
