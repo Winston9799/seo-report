@@ -31,6 +31,18 @@ After that, it updates itself every day. You don't need to touch it again unless
 want to:
 - Change the schedule → edit the `cron` line in `.github/workflows/daily-update.yml`
 - Change the excluded regions or a brand's keyword → top of `scripts/fetch_data.py`
-- Use your real fonts → drop the `.woff2` files into `/fonts` with the names listed
-  in `fonts/README.md`
+- Use your real fonts → drop your existing `public/font/pingfang` and `public/font/sans`
+  folders into `/font` at the repo root (see `font/README.md` for the exact file list)
 - Change a brand's color → the `color` field in `scripts/fetch_data.py`'s `BRANDS` list
+- Change the report's passphrase → `REPORT_PASSWORD` near the top of `app.js` (this is
+  a light deterrent only, not real security — see the comment above it in the code)
+- Change how many months get re-fetched daily / keep day-level detail → `REFRESH_MONTHS`
+  and `DAILY_DETAIL_MONTHS` in `scripts/fetch_data.py`
+
+## How the data script stays fast
+Older months aren't re-downloaded every day — `fetch_data.py` reads whatever's already
+in `data/<brand>.json`, only re-fetches the most recent `REFRESH_MONTHS` months, and
+carries the rest forward unchanged. Full per-day keyword/page/country/device detail
+(needed for the Day-vs-Day comparison mode) is only kept for the most recent
+`DAILY_DETAIL_MONTHS` months, to keep file sizes reasonable — older months still have
+full monthly totals, just not a day-by-day breakdown.
