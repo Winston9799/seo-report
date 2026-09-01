@@ -17,7 +17,7 @@ const SWING_MIN_BASELINE = 10;
 // For genuine access control, put this behind Cloudflare Access or similar.
 // ---------------------------------------------------------------------------
 
-const REPORT_PASSWORD = "Winston_Marketing11"; // <-- change this to your own passphrase before sharing the link
+const REPORT_PASSWORD = "changeme"; // <-- change this to your own passphrase before sharing the link
 
 // Hides the password screen and reveals the actual report underneath it.
 function unlockReport() {
@@ -48,6 +48,24 @@ if (sessionStorage.getItem("seo_report_unlocked") === "true") {
 document.getElementById("password-submit").addEventListener("click", attemptUnlock);
 document.getElementById("password-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") attemptUnlock();
+});
+
+// Eye-icon button: toggles the password field between masked (dots) and
+// plain text, so you can actually see what you typed before submitting.
+// Swaps the icon between a plain eye (click to reveal) and an eye with a
+// line through it (click to hide again) to reflect the current state.
+const EYE_ICON = `<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>`;
+const EYE_OFF_ICON = `<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/><line x1="2" y1="2" x2="22" y2="22"/>`;
+
+document.getElementById("password-toggle").addEventListener("click", () => {
+  const input = document.getElementById("password-input");
+  const btn = document.getElementById("password-toggle");
+  const icon = document.getElementById("password-eye-icon");
+  const nowVisible = input.type === "password";
+  input.type = nowVisible ? "text" : "password";
+  icon.innerHTML = nowVisible ? EYE_OFF_ICON : EYE_ICON;
+  btn.setAttribute("aria-label", nowVisible ? "Hide passphrase" : "Show passphrase");
+  input.focus();
 });
 
 // ---------------------------------------------------------------------------
@@ -298,6 +316,45 @@ function listAvailableDays() {
   return [...new Set(days)].sort().reverse(); // newest first
 }
 
+// "2026-07-31" -> "Jul 31, 2026". Used for both day-dropdown labels and the
+// Trend chart's per-day legend labels in Day mode.
+function fmtDateLabel(dateStr) {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// Flattens every loaded month's lightweight daily totals (mo.daily) into one
+// {date: {clicks, impressions, ...}} lookup spanning the whole loaded
+// history — lets trailingWindow() below pull a date range that may cross a
+// calendar month boundary without caring which month each day came from.
+function buildDailyIndex() {
+  const idx = {};
+  months.forEach(mo => {
+    (mo.daily || []).forEach(d => { idx[d.date] = d; });
+  });
+  return idx;
+}
+
+const TREND_DAY_WINDOW = 14; // how many trailing days the Trend chart shows in Day mode
+
+// Builds a `days`-long daily series ENDING ON dateStr (inclusive) — e.g.
+// trailingWindow("2026-07-31", 14) returns Jul 18 through Jul 31. This is
+// what makes Day-mode comparisons always show genuinely different data:
+// unlike using the enclosing month's full daily array (the original, buggy
+// approach), two different selected days NEVER produce the same window,
+// even if both fall in the same calendar month. Dates outside the archived
+// range come back as null-valued points, which Chart.js simply skips.
+function trailingWindow(dateStr, days, idx) {
+  const end = new Date(dateStr + "T00:00:00");
+  const series = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(end);
+    d.setDate(d.getDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    series.push(idx[iso] || { date: iso, clicks: null, impressions: null, ctr: null, position: null, sessions: null });
+  }
+  return series;
+}
+
 // The key piece that makes Day mode work without duplicating every render
 // function: takes one date string and reshapes that day's data into an
 // object with the exact same fields a "month" object has (summary,
@@ -353,30 +410,45 @@ function buildDaySnapshot(dateStr) {
 //
 // `opts` controls the table as a whole: defaultSortKey/defaultSortDir (how
 // it's sorted when first rendered), searchKey (which field the search box
-// filters on), searchable (set false to hide the search box), and rowClass
-// (a function that returns a CSS class per row, used for swing highlighting).
+// filters on), searchable (set false to hide the search box), rowClass (a
+// function that returns a CSS class per row, used for swing highlighting),
+// and pageSize (how many rows show before a "Show all" toggle appears —
+// defaults to 30).
+//
+// IMPORTANT ordering: sorting and searching always run against the FULL
+// row set first (see getRows() below); the page-size limit is applied as
+// the very last step, only to decide how many of the already-sorted rows
+// to display. That order matters — sorting only the visible slice would
+// silently give wrong results the moment someone changes the sort column.
 function createInteractiveTable(container, columns, allRows, opts = {}) {
   if (!container) return;
   let sortKey = opts.defaultSortKey || columns[0].key;
   let sortDir = opts.defaultSortDir || "desc";
   let search = "";
+  let expanded = false;
+  const PAGE_SIZE = opts.pageSize || 30;
   const searchable = opts.searchable !== false;
   const searchKey = opts.searchKey || columns[0].key;
 
   // Build the static shell once. Only the search input needs to survive
   // across re-renders (so it doesn't lose focus while typing) — everything
-  // else inside gets rebuilt by renderHead()/renderBody() below.
+  // else inside gets rebuilt by renderHead()/renderBody() below. The table
+  // sits in its own .table-scroll box so a too-wide table scrolls within
+  // itself instead of stretching the whole page.
   container.innerHTML = `
     ${searchable ? `<input type="text" class="table-search" placeholder="Search…">` : ""}
-    <table><thead><tr></tr></thead><tbody></tbody></table>`;
+    <div class="table-scroll"><table><thead><tr></tr></thead><tbody></tbody></table></div>
+    <div class="table-toggle" style="display:none;"></div>`;
 
   const theadRow = container.querySelector("thead tr");
   const tbody = container.querySelector("tbody");
   const searchInput = searchable ? container.querySelector(".table-search") : null;
+  const toggleEl = container.querySelector(".table-toggle");
 
-  // Applies the current search text and sort column/direction to allRows,
-  // without mutating the original array (so switching sort/search back and
-  // forth never loses data).
+  // Applies the current search text and sort column/direction to the FULL
+  // allRows array, without mutating the original (so switching sort/search
+  // back and forth never loses data). Page-size slicing happens later, in
+  // renderBody() — never here.
   function getRows() {
     let rows = allRows;
     if (search) {
@@ -428,25 +500,46 @@ function createInteractiveTable(container, columns, allRows, opts = {}) {
   }
 
   // (Re)draws just the table body — called on load, and again on every
-  // search keystroke or sort click. Kept separate from renderHead() so
-  // typing in the search box never touches (and never steals focus from)
-  // the input element itself.
+  // search keystroke, sort click, or Show more/fewer click. Kept separate
+  // from renderHead() so typing in the search box never touches (and never
+  // steals focus from) the input element itself.
+  //
+  // Sorts/filters the FULL dataset via getRows(), THEN slices to PAGE_SIZE
+  // rows for display (unless expanded) — in that order, always. Also draws
+  // the "Show all N rows" / "Show fewer rows" toggle beneath the table when
+  // there are more rows than fit on one page.
   function renderBody() {
-    const rows = getRows();
-    if (rows.length === 0) {
+    const sorted = getRows();
+    const displayRows = expanded ? sorted : sorted.slice(0, PAGE_SIZE);
+
+    if (displayRows.length === 0) {
       tbody.innerHTML = `<tr><td colspan="${columns.length}" style="text-align:center; color:var(--muted); padding:20px;">No matching rows</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = rows.map(r => {
-      const rowClass = opts.rowClass ? opts.rowClass(r) : "";
-      const cells = columns.map(c => {
-        const raw = r[c.key];
-        const val = c.format ? c.format(raw, r) : (raw ?? "—");
-        const cls = [c.align === "num" ? "num" : "", c.wrap ? "query-cell" : ""].filter(Boolean).join(" ");
-        return `<td class="${cls}">${val}</td>`;
+    } else {
+      tbody.innerHTML = displayRows.map(r => {
+        const rowClass = opts.rowClass ? opts.rowClass(r) : "";
+        const cells = columns.map(c => {
+          const raw = r[c.key];
+          const val = c.format ? c.format(raw, r) : (raw ?? "—");
+          const cls = [c.align === "num" ? "num" : "", c.wrap ? "query-cell" : ""].filter(Boolean).join(" ");
+          return `<td class="${cls}">${val}</td>`;
+        }).join("");
+        return `<tr class="${rowClass}">${cells}</tr>`;
       }).join("");
-      return `<tr class="${rowClass}">${cells}</tr>`;
-    }).join("");
+    }
+
+    if (sorted.length > PAGE_SIZE) {
+      toggleEl.style.display = "block";
+      toggleEl.innerHTML = expanded
+        ? `<button class="table-toggle-btn">Show fewer rows</button>`
+        : `<button class="table-toggle-btn">Show all ${sorted.length} rows</button>`;
+      toggleEl.querySelector("button").addEventListener("click", () => {
+        expanded = !expanded;
+        renderBody();
+      });
+    } else {
+      toggleEl.style.display = "none";
+      toggleEl.innerHTML = "";
+    }
   }
 
   if (searchInput) {
@@ -468,23 +561,24 @@ function createInteractiveTable(container, columns, allRows, opts = {}) {
 // Chart.js chart in place instead of creating a new canvas each time.
 let trendChart = null;
 
-// Draws (or updates) the line chart at the top of the report. Always plots
-// full months' worth of daily data — even in Day mode, this is called with
-// the two ENCLOSING months of whichever days are selected (see renderAll),
-// so the chart gives surrounding context rather than trying to show a
-// "trend" for a single day, which wouldn't mean anything.
-function renderTrendChart(curr, comp) {
+// Draws (or updates) the line chart at the top of the report. Takes each
+// side's data as an already-built {series, label} pair, rather than a month
+// object — this is deliberate: in Month mode the caller passes the month's
+// own .daily array, and in Day mode it passes a trailingWindow() result, but
+// renderTrendChart itself doesn't need to know or care which — it just
+// plots two series against two labels, so it can never accidentally end up
+// plotting the same underlying data twice under two different-looking labels.
+function renderTrendChart(currSeries, currLabel, compSeries, compLabel) {
   const metric = document.getElementById("metric-select").value;
-  const currDaily = curr.daily || [];
-  const compDaily = comp.daily || [];
-  // The two months being compared can have different lengths (28-31 days),
-  // so the x-axis is "Day 1, Day 2, ..." rather than actual calendar dates —
-  // that's what lets, say, Feb 14 and Aug 14 line up at the same x position.
-  const maxDays = Math.max(currDaily.length, compDaily.length, 1);
+  // The two series can have different lengths (Month mode: 28-31 days;
+  // Day mode: always TREND_DAY_WINDOW), so the x-axis is "Day 1, Day 2, ..."
+  // rather than actual calendar dates — that's what lets two differently-
+  // dated windows line up at the same x position for comparison.
+  const maxDays = Math.max(currSeries.length, compSeries.length, 1);
   const labels = Array.from({ length: maxDays }, (_, i) => `Day ${i + 1}`);
 
-  const currValues = labels.map((_, i) => (currDaily[i] ? currDaily[i][metric] : null));
-  const compValues = labels.map((_, i) => (compDaily[i] ? compDaily[i][metric] : null));
+  const currValues = labels.map((_, i) => (currSeries[i] ? currSeries[i][metric] : null));
+  const compValues = labels.map((_, i) => (compSeries[i] ? compSeries[i][metric] : null));
 
   // Read the live brand accent color so the chart's current-period line
   // always matches whichever brand is selected, without hardcoding a color.
@@ -496,7 +590,7 @@ function renderTrendChart(curr, comp) {
     labels,
     datasets: [
       {
-        label: `${curr.label} (${metric})`,
+        label: `${currLabel} (${metric})`,
         data: currValues,
         borderColor: accent,
         backgroundColor: accent,
@@ -505,7 +599,7 @@ function renderTrendChart(curr, comp) {
         tension: 0.25,
       },
       {
-        label: `${comp.label} (${metric})`,
+        label: `${compLabel} (${metric})`,
         data: compValues,
         borderColor: muted,
         backgroundColor: muted,
@@ -896,31 +990,43 @@ function showEmptyState(brandLabel) {
 // back to this one function running.
 function renderAll() {
   const mode = document.getElementById("compare-mode").value;
-  let curr, comp, trendCurrMonth, trendCompMonth;
+  let curr, comp, currTrendSeries, currTrendLabel, compTrendSeries, compTrendLabel;
 
   if (mode === "day") {
     const d1 = document.getElementById("day-current").value;
     const d2 = document.getElementById("day-compare").value;
     curr = buildDaySnapshot(d1);
     comp = buildDaySnapshot(d2);
-    // The Trend chart always shows full-month context, even in Day mode —
-    // see the comment on renderTrendChart for why.
-    trendCurrMonth = findMonthContainingDate(d1);
-    trendCompMonth = findMonthContainingDate(d2);
+    // Each side gets its OWN 14-day trailing window ending on that exact
+    // selected day — never the enclosing month's full array. That's what
+    // guarantees Jul 31 vs Jul 3 (same month) still show genuinely
+    // different data instead of the bug where both sides silently plotted
+    // the same month and the legend showed two identical labels.
+    if (d1 && d2) {
+      const idx = buildDailyIndex();
+      currTrendSeries = trailingWindow(d1, TREND_DAY_WINDOW, idx);
+      compTrendSeries = trailingWindow(d2, TREND_DAY_WINDOW, idx);
+      currTrendLabel = fmtDateLabel(d1);
+      compTrendLabel = fmtDateLabel(d2);
+    }
   } else {
     const currIdx = Number(document.getElementById("month-current").value);
     const compIdx = Number(document.getElementById("month-compare").value);
     curr = months[currIdx];
     comp = months[compIdx];
-    trendCurrMonth = curr;
-    trendCompMonth = comp;
+    if (curr && comp) {
+      currTrendSeries = curr.daily || [];
+      compTrendSeries = comp.daily || [];
+      currTrendLabel = curr.label;
+      compTrendLabel = comp.label;
+    }
   }
   // Bail out quietly if anything couldn't be resolved (e.g. Day mode
   // selected before any daily_detail exists yet) rather than rendering with
   // half-missing data.
-  if (!curr || !comp || !trendCurrMonth || !trendCompMonth) return;
+  if (!curr || !comp || !currTrendSeries || !compTrendSeries) return;
 
-  renderTrendChart(trendCurrMonth, trendCompMonth);
+  renderTrendChart(currTrendSeries, currTrendLabel, compTrendSeries, compTrendLabel);
   renderSummary(curr, comp);
   renderSplit(curr);
   renderPositionDistribution(curr);
@@ -960,8 +1066,7 @@ function populateDayPickers() {
     compareSel.innerHTML = currentSel.innerHTML;
     return;
   }
-  const fmt = d => new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  const options = days.map(d => `<option value="${d}">${fmt(d)}</option>`).join("");
+  const options = days.map(d => `<option value="${d}">${fmtDateLabel(d)}</option>`).join("");
   currentSel.innerHTML = options;
   compareSel.innerHTML = options;
   currentSel.value = days[0];
