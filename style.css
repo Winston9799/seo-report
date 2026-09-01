@@ -1,42 +1,184 @@
-/* ---------- Fonts (graceful fallback until real .woff2 files are added to /fonts) ---------- */
+/* ============================================================
+   PASSWORD GATE
+   Full-screen overlay shown before the report; app.js hides this
+   element and reveals #report-root once the passphrase matches.
+   ============================================================ */
+
+.password-gate {
+  position: fixed;
+  inset: 0;
+  background: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.password-box {
+  background: var(--white);
+  padding: 32px;
+  border-radius: var(--radius-xl);
+  width: 100%;
+  max-width: 320px;
+  text-align: center;
+}
+
+.password-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.password-copy {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+.password-input {
+  width: 100%;
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  font-family: inherit;
+  font-size: 15px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.password-submit {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--ink);
+  color: var(--white);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+/* brightness(0.85) darkens whatever --ink currently is, rather than a
+   hardcoded hover color — works automatically even if --ink ever changes */
+.password-submit:hover { filter: brightness(0.85); }
+
+.password-error {
+  color: var(--negative);
+  font-size: 13px;
+  margin: 12px 0 0;
+}
+
+/* ============================================================
+   FONTS
+   Tries your real brand fonts first (drop the .woff2 files into
+   /font/pingfang and /font/sans — see font/README.md), then falls
+   back to Noto Sans SC (a real, freely-licensed font loaded from
+   Google Fonts in index.html), then finally the device's own system
+   font. Every @font-face below will just silently fail to load
+   until those local files exist — that's expected, not a bug.
+   ============================================================ */
+
+@font-face {
+  font-family: 'PingFangSC';
+  src: url('/font/pingfang/PingFangSC-Thin.woff2') format('woff2');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'PingFangSC';
+  src: url('/font/pingfang/PingFangSC-Ultralight.woff2') format('woff2');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'PingFangSC';
+  src: url('/font/pingfang/PingFangSC-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'PingFangSC';
+  src: url('/font/pingfang/PingFangSC-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'PingFangSC';
+  src: url('/font/pingfang/PingFangSC-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'PingFangSC';
+  src: url('/font/pingfang/PingFangSC-Semibold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
 
 @font-face {
   font-family: 'HarmonyOS Sans SC';
-  src: url('/fonts/HarmonyOS_Sans_SC_Regular.woff2') format('woff2');
+  src: url('/font/sans/HarmonyOS_Sans_SC_Thin.woff2') format('woff2');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  src: url('/font/sans/HarmonyOS_Sans_SC_Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  src: url('/font/sans/HarmonyOS_Sans_SC_Regular.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'HarmonyOS Sans SC';
-  src: url('/fonts/HarmonyOS_Sans_SC_Medium.woff2') format('woff2');
+  src: url('/font/sans/HarmonyOS_Sans_SC_Medium.woff2') format('woff2');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'HarmonyOS Sans SC';
-  src: url('/fonts/HarmonyOS_Sans_SC_Bold.woff2') format('woff2');
+  src: url('/font/sans/HarmonyOS_Sans_SC_Bold.woff2') format('woff2');
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
-  font-family: 'PingFangSC';
-  src: url('/fonts/PingFangSC_Regular.woff2') format('woff2');
-  font-weight: 400;
+  font-family: 'HarmonyOS Sans SC';
+  src: url('/font/sans/HarmonyOS_Sans_SC_Black.woff2') format('woff2');
+  font-weight: 900;
   font-style: normal;
   font-display: swap;
 }
 
-/* ---------- Design tokens, taken from the brand's own tailwind config ---------- */
+/* ============================================================
+   DESIGN TOKENS
+   Colors/radii pulled from the brand's own tailwind config, as
+   CSS custom properties so every rule below can reference them by
+   name instead of repeating hex codes.
+   ============================================================ */
 
 :root {
-  --ink: #000a1e;          /* primary text / dark surfaces */
-  --secondary: #2d3442;    /* secondary text */
-  --muted: #747c8a;        /* muted labels */
-  --border: #d6dcea;       /* hairline borders */
-  --surface: #fafbfd;      /* light background fill */
+  --ink: #000a1e;          /* primary text / dark surfaces (e.g. the header) */
+  --secondary: #2d3442;    /* secondary text, and the "non-branded" bar color */
+  --muted: #747c8a;        /* muted labels, section notes */
+  --border: #d6dcea;       /* hairline borders throughout */
+  --surface: #fafbfd;      /* light page background */
   --white: #ffffff;
   --positive: #22b2a4;     /* brand's --cyan, used for upward deltas */
   --negative: #db5614;     /* brand's --red, used for downward deltas */
@@ -46,7 +188,13 @@
   --radius-lg: 8px;
   --radius-xl: 12px;
 
-  --accent: #b22333;       /* default: Anzo. Swapped live by app.js when the brand toggle changes */
+  /* The ONE color that changes per brand. app.js sets this directly via
+     document.documentElement.style.setProperty("--accent", ...) whenever
+     the brand toggle is clicked — every rule below that uses var(--accent)
+     updates automatically the instant that happens, with no other CSS
+     changes needed. #b22333 (Anzo red) is just the default before any
+     brand has loaded. */
+  --accent: #b22333;
 }
 
 * { box-sizing: border-box; }
@@ -55,8 +203,8 @@ body {
   margin: 0;
   background: var(--surface);
   color: var(--ink);
-  font-family: 'HarmonyOS Sans SC', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  font-variant-numeric: tabular-nums;
+  font-family: 'HarmonyOS Sans SC', 'PingFangSC', 'Noto Sans SC', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-variant-numeric: tabular-nums;  /* keeps digits the same width so numbers in tables align in columns */
   line-height: 1.5;
 }
 
@@ -66,7 +214,11 @@ body {
   padding: 0 24px 96px;
 }
 
-/* ---------- Header ---------- */
+/* ============================================================
+   HEADER
+   Sticky dark bar containing the brand switcher and both sets of
+   period pickers (Month/Month or Day/Day, toggled by #compare-mode).
+   ============================================================ */
 
 header {
   position: sticky;
@@ -82,50 +234,50 @@ header {
   gap: 16px;
 }
 
-.brand-title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-}
+.brand-title { font-size: 26px; font-weight: 700; letter-spacing: 0.01em; }
 
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
+.header-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 
+/* Anzo / DLSM pill toggle */
 .brand-tabs {
   display: flex;
   gap: 4px;
   background: rgba(255,255,255,0.08);
   padding: 4px;
-  border-radius: var(--radius-base);
+  border-radius: 9999px;
 }
 
 .brand-tabs button {
   border: none;
   background: transparent;
   color: rgba(255,255,255,0.7);
-  padding: 6px 16px;
+  padding: 8px 20px;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: 9999px;
+  transition: background 0.15s, color 0.15s, filter 0.15s;
 }
 
+.brand-tabs button:hover { background: rgba(255,255,255,0.12); color: var(--white); }
+
+/* The active tab is a solid --accent pill with white text — the closest
+   analog on this page to the site's own CTA button style */
 .brand-tabs button.active {
-  background: var(--white);
-  color: var(--accent);
+  background: var(--accent);
+  color: var(--white);
   font-weight: 700;
 }
 
+.brand-tabs button.active:hover { filter: brightness(0.88); background: var(--accent); }
+
+/* Shared style for the "Compare by" / Month / Day dropdown groups in the header */
 .month-picker {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: 15px;
   color: rgba(255,255,255,0.75);
 }
 
@@ -133,21 +285,47 @@ header {
   background: rgba(255,255,255,0.1);
   color: var(--white);
   border: 1px solid rgba(255,255,255,0.25);
-  border-radius: var(--radius-sm);
-  padding: 5px 8px;
+  border-radius: 9999px;
+  padding: 7px 16px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 15px;
+  cursor: pointer;
+  min-width: 130px;   /* stops an empty/loading <select> collapsing into a tiny blank oval */
+  transition: background 0.15s;
 }
 
-.month-picker select option { color: var(--ink); }
+.month-picker select:hover { background: rgba(255,255,255,0.18); }
+
+.month-picker select option { color: var(--ink); }  /* the dropdown's OPEN list uses normal (light-background) colors */
+
+/* Light-background version of the pill dropdown, used for the Trend
+   chart's metric picker since that one sits on a white card, not the
+   dark header */
+.month-picker-inline {
+  background: var(--white);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 7px 16px;
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.month-picker-inline:hover { background: var(--surface); border-color: var(--accent); }
 
 .meta-line {
   font-size: 12px;
   color: rgba(255,255,255,0.55);
-  width: 100%;
+  width: 100%;  /* forces it onto its own line below the controls, rather than squeezing into the flex row */
 }
 
-/* ---------- Section structure ---------- */
+/* ============================================================
+   SECTION STRUCTURE
+   Shared heading style used by every <section> in the report
+   (Executive Summary, Branded Split, CTR Opportunities, etc.)
+   ============================================================ */
 
 section { margin-top: 48px; }
 
@@ -160,20 +338,21 @@ section { margin-top: 48px; }
   margin-bottom: 20px;
 }
 
-.section-head h2 {
-  font-size: 20px;
-  font-weight: 700;
-  margin: 0;
-}
+.section-head h2 { font-size: 20px; font-weight: 700; margin: 0; }
 
 .section-note { font-size: 13px; color: var(--muted); }
 
-/* ---------- KPI cards ---------- */
+/* ============================================================
+   KPI CARDS
+   The tiles in the Executive Summary section (Total clicks, Total
+   impressions, etc.) — built by kpiCard() in app.js.
+   ============================================================ */
 
 .kpi-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1px;
+  gap: 1px;                 /* the 1px gap + matching background color is what
+                                draws the hairline dividers between tiles */
   background: var(--border);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -185,11 +364,14 @@ section { margin-top: 48px; }
 .kpi-value { font-size: 30px; font-weight: 700; line-height: 1.1; }
 .kpi-delta { margin-top: 6px; font-size: 13px; font-weight: 600; }
 
+/* Used by fmtDelta() in app.js for every up/down percentage shown anywhere in the report */
 .delta-up { color: var(--positive); }
 .delta-down { color: var(--negative); }
 .delta-flat { color: var(--muted); }
 
-/* ---------- Branded split ---------- */
+/* ============================================================
+   BRANDED VS. NON-BRANDED SPLIT BAR
+   ============================================================ */
 
 .split-bar {
   display: flex;
@@ -212,7 +394,29 @@ section { margin-top: 48px; }
   margin-right: 6px;
 }
 
-/* ---------- Tables ---------- */
+/* ============================================================
+   VISIBILITY DISTRIBUTION BAR
+   Same visual idea as the split bar above, but with 4 segments
+   (Top 3 / 4-10 / 11-20 / 21+) instead of 2 — built by
+   renderPositionDistribution() in app.js, which reuses .split-legend
+   above for its legend row.
+   ============================================================ */
+
+.distribution-bar {
+  display: flex;
+  height: 28px;
+  border-radius: var(--radius-base);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+/* ============================================================
+   TABLES
+   Shared styling for every data table in the report — all built
+   through the same createInteractiveTable() function in app.js,
+   so one set of rules here covers Movers, Keywords, Pages,
+   Countries, and CTR Opportunities alike.
+   ============================================================ */
 
 table { width: 100%; border-collapse: collapse; background: var(--white); font-size: 14px; }
 
@@ -226,21 +430,74 @@ thead th {
   white-space: nowrap;
 }
 
+/* Only headers with a data-key attribute are actually clickable-to-sort
+   (createInteractiveTable adds this attribute in app.js) */
+thead th[data-key] { cursor: pointer; user-select: none; }
+thead th[data-key]:hover { color: var(--ink); }
+
+/* The small ⇅/▲/▼ icon next to each sortable column header — faint until
+   that column is the active sort, then fills in solid + accent-colored */
+.sort-arrow { opacity: 0.35; font-size: 10px; margin-left: 4px; }
+.sort-arrow.active { opacity: 1; color: var(--accent); }
+
+.table-search {
+  width: 100%;
+  max-width: 320px;
+  margin-bottom: 10px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--white);
+  color: var(--ink);
+  transition: border-color 0.15s;
+}
+
+.table-search:focus { border-color: var(--accent); outline: none; }
+
 tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 tbody tr:hover { background: var(--surface); }
 
 td.num, th.num { text-align: right; }
+/* Long text (queries, page URLs) wraps instead of forcing the column wide */
 td.query-cell, td.page-cell { white-space: normal; max-width: 360px; }
 
+/* Highlights a row whose clicks moved ≥50% between the two selected periods
+   (see SWING_THRESHOLD_PCT / swingRowClass() in app.js) */
+tr.row-swing-up { background: rgba(34, 178, 164, 0.09); }
+tr.row-swing-down { background: rgba(219, 86, 20, 0.09); }
+tr.row-swing-up:hover { background: rgba(34, 178, 164, 0.15); }
+tr.row-swing-down:hover { background: rgba(219, 86, 20, 0.15); }
+
+/* "New" / "Lost" pills next to a query in the Top Keyword Movers table
+   (see statusBadge() in app.js) */
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.badge-new { background: rgba(34, 178, 164, 0.15); color: var(--positive); }
+.badge-lost { background: rgba(219, 86, 20, 0.15); color: var(--negative); }
+
+/* Used for every "two tables side by side" layout: Branded/Non-branded
+   keywords, each page category's By-impressions/By-clicks pair, and
+   Top Countries/Device Split */
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
 
 @media (max-width: 760px) {
-  .two-col { grid-template-columns: 1fr; }
+  .two-col { grid-template-columns: 1fr; }  /* stack side-by-side tables on mobile instead of squeezing them */
   header { padding: 12px 16px; }
   .container { padding: 0 16px 64px; }
 }
 
-/* ---------- Device split ---------- */
+/* ============================================================
+   DEVICE SPLIT
+   Plain bar-list (not a full interactive table — see
+   renderDeviceSplit() in app.js for why).
+   ============================================================ */
 
 .device-list { display: flex; flex-direction: column; gap: 10px; }
 
@@ -255,7 +512,10 @@ td.query-cell, td.page-cell { white-space: normal; max-width: 360px; }
 .device-bar-track { background: var(--border); height: 10px; border-radius: 5px; overflow: hidden; }
 .device-bar-fill { background: var(--accent); height: 100%; }
 
-/* ---------- Empty / loading states ---------- */
+/* ============================================================
+   EMPTY / LOADING STATES
+   Shown by showEmptyState() in app.js when a brand has no data yet.
+   ============================================================ */
 
 .empty-state {
   padding: 48px 24px;
