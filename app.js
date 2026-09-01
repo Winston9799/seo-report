@@ -17,7 +17,7 @@ const SWING_MIN_BASELINE = 10;
 // For genuine access control, put this behind Cloudflare Access or similar.
 // ---------------------------------------------------------------------------
 
-const REPORT_PASSWORD = "Winston_MKT11"; // <-- change this to your own passphrase before sharing the link
+const REPORT_PASSWORD = "changeme"; // <-- change this to your own passphrase before sharing the link
 
 // Hides the password screen and reveals the actual report underneath it.
 function unlockReport() {
@@ -442,6 +442,7 @@ function createInteractiveTable(container, columns, allRows, opts = {}) {
 
   const theadRow = container.querySelector("thead tr");
   const tbody = container.querySelector("tbody");
+  const scrollBox = container.querySelector(".table-scroll");
   const searchInput = searchable ? container.querySelector(".table-search") : null;
   const toggleEl = container.querySelector(".table-toggle");
 
@@ -534,6 +535,7 @@ function createInteractiveTable(container, columns, allRows, opts = {}) {
         : `<button class="table-toggle-btn">Show all ${sorted.length} rows</button>`;
       toggleEl.querySelector("button").addEventListener("click", () => {
         expanded = !expanded;
+        scrollBox.classList.toggle("expanded", expanded);
         renderBody();
       });
     } else {
@@ -926,6 +928,7 @@ const countryColumns = [
   { key: "country_name", label: "Country" },  // sorts/searches by the full display name, not the raw code
   { key: "clicks", label: "Clicks", align: "num", format: fmtNum },
   { key: "clicks_change_pct", label: "Δ", align: "num", format: fmtDelta },
+  { key: "impressions", label: "Impressions", align: "num", format: fmtNum },
   { key: "ctr", label: "CTR", align: "num", format: v => fmtPct(v) },
   { key: "position", label: "Position", align: "num", defaultDir: "asc" },
 ];
