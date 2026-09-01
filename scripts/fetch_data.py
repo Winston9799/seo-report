@@ -44,6 +44,11 @@ BRANDS = [
         "ga4_property_id": "480686179",
         "gsc_site_url": "sc-domain:anzocapital.com",
         "brand_keyword": "anzo capital",   # any query containing this = branded
+        # These subdomains (portal login, file server) aren't real content —
+        # excluded from every GSC row server-side, and every GA4 row by hostname,
+        # before any total/keyword/page/country/device number is calculated.
+        "exclude_page_regex": r"^https?://(my|files)\.anzocapital\.com(/|\?|$)",
+        "exclude_ga4_hostnames": ["my.anzocapital.com", "files.anzocapital.com"],
     },
     {
         "label": "DLSM",
@@ -115,14 +120,19 @@ def month_bounds(year, month):
 # Search Console helpers
 # ---------------------------------------------------------------------------
 
-def gsc_query(service, site_url, dimensions, start, end, row_limit=25000, max_pages=6):
+def gsc_query(service, site_url, dimensions, start, end, row_limit=25000, max_pages=6, exclude_page_regex=None):
     """Runs one Search Console searchAnalytics query and returns every row as
     a plain dict, e.g. {"query": "...", "country": "usa", "clicks": 5, ...}.
 
     Paginates automatically — a month with 'date' as an extra dimension can
     easily exceed the API's 25,000-row-per-call cap for a busy site, so this
     keeps requesting further pages (up to max_pages) until a page comes back
-    with fewer rows than requested, meaning there's nothing left to fetch."""
+    with fewer rows than requested, meaning there's nothing left to fetch.
+
+    exclude_page_regex, if given, excludes matching URLs SERVER-SIDE via the
+    API's own filter — the "page" dimension doesn't need to be part of
+    `dimensions` for this to work, so query/country/device pulls can exclude
+    by URL without needing to add "page" as an extra grouping dimension."""
     all_rows = []
     start_row = 0
     for _ in range(max_pages):
@@ -133,6 +143,12 @@ def gsc_query(service, site_url, dimensions, start, end, row_limit=25000, max_pa
             "rowLimit": row_limit,
             "startRow": start_row,
         }
+        if exclude_page_regex:
+            body["dimensionFilterGroups"] = [{
+                "filters": [
+                    {"dimension": "page", "operator": "excludingRegex", "expression": exclude_page_regex}
+                ]
+            }]
         resp = service.searchanalytics().query(siteUrl=site_url, body=body).execute()
         page_rows = resp.get("rows", [])
         for r in page_rows:
@@ -207,16 +223,17 @@ def group_by_date_then(rows, sub_key, top_n):
 # GA4 helpers
 # ---------------------------------------------------------------------------
 
-def ga4_totals(client, property_id, start, end):
+def ga4_totals(client, property_id, start, end, exclude_hostnames=None):
     """Total sessions/activeUsers/conversions for one GA4 property over a
-    date range, with excluded-country traffic subtracted out. Pulls the
-    "country" dimension purely so each row can be checked against the
-    exclusion list before being added to the running total — the country
-    breakdown itself isn't kept."""
+    date range, with excluded-country AND excluded-hostname traffic
+    subtracted out. Pulls "country" and "hostName" purely so each row can be
+    checked against both exclusion lists before being added to the running
+    total — neither breakdown itself is kept."""
+    exclude_hostnames = exclude_hostnames or []
     request = RunReportRequest(
         property=f"properties/{property_id}",
         date_ranges=[DateRange(start_date=start.isoformat(), end_date=end.isoformat())],
-        dimensions=[Dimension(name="country")],
+        dimensions=[Dimension(name="country"), Dimension(name="hostName")],
         metrics=[Metric(name="sessions"), Metric(name="activeUsers"), Metric(name="conversions")],
     )
     resp = client.run_report(request)
@@ -224,26 +241,31 @@ def ga4_totals(client, property_id, start, end):
     for row in resp.rows:
         if row.dimension_values[0].value in EXCLUDE_GA4_COUNTRIES:
             continue
+        if row.dimension_values[1].value in exclude_hostnames:
+            continue
         sessions += int(row.metric_values[0].value)
         active_users += int(row.metric_values[1].value)
         conversions += int(row.metric_values[2].value)
     return {"sessions": sessions, "activeUsers": active_users, "conversions": conversions}
 
 
-def ga4_daily_totals(client, property_id, start, end):
+def ga4_daily_totals(client, property_id, start, end, exclude_hostnames=None):
     """Same as ga4_totals, but broken out by day instead of collapsed into
     one number — powers the day-by-day GA4 numbers in the Trend chart and the
     Day-vs-Day Executive Summary. Returns {iso_date: {"sessions": .., ...}}."""
+    exclude_hostnames = exclude_hostnames or []
     request = RunReportRequest(
         property=f"properties/{property_id}",
         date_ranges=[DateRange(start_date=start.isoformat(), end_date=end.isoformat())],
-        dimensions=[Dimension(name="date"), Dimension(name="country")],
+        dimensions=[Dimension(name="date"), Dimension(name="country"), Dimension(name="hostName")],
         metrics=[Metric(name="sessions"), Metric(name="activeUsers"), Metric(name="conversions")],
     )
     resp = client.run_report(request)
     by_date = {}
     for row in resp.rows:
         if row.dimension_values[1].value in EXCLUDE_GA4_COUNTRIES:
+            continue
+        if row.dimension_values[2].value in exclude_hostnames:
             continue
         raw_d = row.dimension_values[0].value  # GA4 returns dates as "YYYYMMDD"
         iso_d = f"{raw_d[0:4]}-{raw_d[4:6]}-{raw_d[6:8]}"  # reformat to "YYYY-MM-DD" to match Search Console's format
@@ -277,14 +299,17 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
         # rows before anything gets summed, so they never enter any total.
         return [r for r in rows if r["country"] not in EXCLUDE_GSC_COUNTRIES]
 
+    exclude_page_regex = brand.get("exclude_page_regex")
+    exclude_ga4_hostnames = brand.get("exclude_ga4_hostnames", [])
+
     # Ask for the "date" dimension too, but only for months inside the
     # daily-detail window — otherwise we'd be pulling (and paying the
     # pagination cost for) far more data than the monthly totals actually need.
     dims_suffix = ["date"] if include_daily_detail else []
-    qc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["query", "country"] + dims_suffix, start, end))
-    pc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["page", "country"] + dims_suffix, start, end))
-    dc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["device", "country"] + dims_suffix, start, end))
-    tc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["date", "country"], start, end))  # always cheap, always fetched
+    qc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["query", "country"] + dims_suffix, start, end, exclude_page_regex=exclude_page_regex))
+    pc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["page", "country"] + dims_suffix, start, end, exclude_page_regex=exclude_page_regex))
+    dc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["device", "country"] + dims_suffix, start, end, exclude_page_regex=exclude_page_regex))
+    tc = clean(gsc_query(gsc_service, brand["gsc_site_url"], ["date", "country"], start, end, exclude_page_regex=exclude_page_regex))  # always cheap, always fetched
 
     # --- Whole-month totals ---
     summary = summarize(qc)
@@ -309,7 +334,7 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
 
     # --- Daily totals (lightweight, kept for ALL months — powers the Trend chart) ---
     daily_gsc = sorted(group_by(tc, "date"), key=lambda r: r["date"])
-    ga4_daily = ga4_daily_totals(ga4_client, brand["ga4_property_id"], start, end)
+    ga4_daily = ga4_daily_totals(ga4_client, brand["ga4_property_id"], start, end, exclude_hostnames=exclude_ga4_hostnames)
     daily = []
     for row in daily_gsc:
         g = ga4_daily.get(row["date"], {"sessions": 0, "activeUsers": 0, "conversions": 0})
@@ -346,7 +371,7 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
                 "devices": daily_devices.get(d, []),
             }
 
-    ga4 = ga4_totals(ga4_client, brand["ga4_property_id"], start, end)
+    ga4 = ga4_totals(ga4_client, brand["ga4_property_id"], start, end, exclude_hostnames=exclude_ga4_hostnames)
 
     # This dict's shape is the contract the report page (app.js) expects —
     # if you rename or remove a key here, the matching code in app.js needs
