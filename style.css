@@ -231,7 +231,7 @@ body {
 }
 
 .container {
-  max-width: 1080px;
+  max-width: 1320px;   /* was 1080px — the two-column tables (Pages, Keywords) need more room for 6 columns each */
   margin: 0 auto;
   padding: 0 24px 96px;
 }
@@ -455,7 +455,7 @@ thead th {
   font-weight: 700;
   font-size: 12px;
   color: var(--muted);
-  padding: 10px 12px;
+  padding: 10px 10px;
   box-shadow: inset 0 -1px 0 var(--accent);
   white-space: nowrap;
   /* Frozen header row: stays pinned to the top of .table-scroll's own
@@ -496,13 +496,18 @@ thead th[data-key]:hover { color: var(--ink); }
    scrolls within its own box, both directions, rather than making the
    whole page enormous. Combined with the sticky rules below, this gives
    proper "frozen panes": the header row stays visible as you scroll down,
-   and the first column stays visible as you scroll sideways. */
+   and the first column stays visible as you scroll sideways. Removed
+   entirely (via .expanded, toggled by the "Show all rows" button in
+   app.js) once the user asks to see everything — then the box grows to
+   fit all rows and the page itself scrolls instead. */
 .table-scroll {
   overflow: auto;
   max-height: 520px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
 }
+
+.table-scroll.expanded { max-height: none; }
 
 /* The "Show all N rows" / "Show fewer rows" link under a table past its
    page-size limit (see PAGE_SIZE in createInteractiveTable, app.js) */
@@ -521,7 +526,7 @@ thead th[data-key]:hover { color: var(--ink); }
 .table-toggle-btn:hover { text-decoration: underline; }
 
 tbody td {
-  padding: 10px 12px;
+  padding: 9px 10px;
   box-shadow: inset 0 -1px 0 var(--border);
   white-space: nowrap;
   background: var(--white);   /* explicit, not inherited — needed so the sticky first column doesn't show scrolled-past content through it */
@@ -551,7 +556,7 @@ tr.row-swing-down:hover td:first-child { background: rgba(219, 86, 20, 0.15); }
 
 td.num, th.num { text-align: right; }
 /* Long text (queries, page URLs) wraps instead of forcing the column wide */
-td.query-cell, td.page-cell { white-space: normal; max-width: 360px; }
+td.query-cell, td.page-cell { white-space: normal; max-width: 300px; }
 
 /* Highlights a row whose clicks moved ≥50% between the two selected periods
    (see SWING_THRESHOLD_PCT / swingRowClass() in app.js) */
