@@ -234,42 +234,132 @@ def group_by_date_then(rows, sub_key, top_n):
 # GA4 helpers
 # ---------------------------------------------------------------------------
 
-def ga4_totals(client, property_id, start, end, exclude_hostnames=None):
-    """Total sessions/activeUsers/conversions for one GA4 property over a
-    date range, with excluded-country AND excluded-hostname traffic
-    subtracted out. Pulls "country" and "hostName" purely so each row can be
-    checked against both exclusion lists before being added to the running
-    total — neither breakdown itself is kept."""
+# GA4's channel-grouping dimension and the exact (case-sensitive) value that
+# means "organic search" — used to restrict every GA4 number in the report
+# to organic traffic only, same principle as the country/hostname exclusions.
+GA4_ORGANIC_CHANNEL = "Organic Search"
+
+
+def ga4_breakdown(client, property_id, start, end, dimension_name, metric_names, exclude_hostnames=None, top_n=30):
+    """Generic GA4 breakdown puller: groups ORGANIC-SEARCH-ONLY traffic by
+    one dimension (brandingInterest, eventName, pageTitle, userGender,
+    operatingSystem, or deviceCategory), summing the given metric(s), with
+    the same country/hostname exclusion and organic-channel filter as every
+    other GA4 number in this file. Powers Interests, Key Events by Event
+    Name, Page Title and Screen, Gender, Operating System, and Device
+    Category — all "current period only" snapshots, same pattern as
+    Position Distribution / CTR Opportunities on the Search Console side.
+
+    userGender and brandingInterest are two of GA4's "potentially
+    thresholded" dimensions — Google may suppress some rows entirely to
+    prevent inferring individual users' demographics from small samples.
+    That's a Google Analytics privacy safeguard, not a bug here — expect
+    those two breakdowns in particular to sometimes total less than the
+    site's overall traffic numbers."""
     exclude_hostnames = exclude_hostnames or []
     request = RunReportRequest(
         property=f"properties/{property_id}",
         date_ranges=[DateRange(start_date=start.isoformat(), end_date=end.isoformat())],
-        dimensions=[Dimension(name="country"), Dimension(name="hostName")],
-        metrics=[Metric(name="sessions"), Metric(name="activeUsers"), Metric(name="conversions")],
+        dimensions=[
+            Dimension(name=dimension_name),
+            Dimension(name="country"),
+            Dimension(name="hostName"),
+            Dimension(name="sessionDefaultChannelGroup"),
+        ],
+        metrics=[Metric(name=m) for m in metric_names],
     )
     resp = client.run_report(request)
-    sessions = active_users = conversions = 0
+    totals = {}
+    for row in resp.rows:
+        if row.dimension_values[1].value in EXCLUDE_GA4_COUNTRIES:
+            continue
+        if row.dimension_values[2].value in exclude_hostnames:
+            continue
+        if row.dimension_values[3].value != GA4_ORGANIC_CHANNEL:
+            continue
+        key = row.dimension_values[0].value
+        entry = totals.setdefault(key, {m: 0 for m in metric_names})
+        for i, m in enumerate(metric_names):
+            entry[m] += int(row.metric_values[i].value)
+    out = [{"label": k, **v} for k, v in totals.items()]
+    out.sort(key=lambda r: r[metric_names[-1]], reverse=True)  # sorts by the last (primary) metric
+    return out[:top_n]
+
+
+def ga4_totals(client, property_id, start, end, exclude_hostnames=None):
+    """Total sessions/engagedSessions/bounceRate/newUsers/activeUsers/
+    keyEvents for one GA4 property over a date range — ORGANIC SEARCH
+    TRAFFIC ONLY (filtered on sessionDefaultChannelGroup), with excluded-
+    country and excluded-hostname traffic also subtracted out first.
+
+    bounceRate is deliberately NOT requested as a metric directly — it's a
+    ratio, and GA4 would hand back a separate bounce rate per country/
+    hostname/channel row. Averaging those per-row rates together (or just
+    taking the last one) would give a mathematically wrong answer once rows
+    are filtered out. Instead this pulls the raw counts (sessions,
+    engagedSessions) and derives bounceRate itself AFTER summing — the same
+    weighted-aggregation principle as weighted_position() above."""
+    exclude_hostnames = exclude_hostnames or []
+    request = RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start.isoformat(), end_date=end.isoformat())],
+        dimensions=[Dimension(name="country"), Dimension(name="hostName"), Dimension(name="sessionDefaultChannelGroup")],
+        metrics=[
+            Metric(name="sessions"),
+            Metric(name="engagedSessions"),
+            Metric(name="newUsers"),
+            Metric(name="activeUsers"),
+            Metric(name="keyEvents"),
+        ],
+    )
+    resp = client.run_report(request)
+    sessions = engaged_sessions = new_users = active_users = key_events = 0
     for row in resp.rows:
         if row.dimension_values[0].value in EXCLUDE_GA4_COUNTRIES:
             continue
         if row.dimension_values[1].value in exclude_hostnames:
             continue
+        if row.dimension_values[2].value != GA4_ORGANIC_CHANNEL:
+            continue
         sessions += int(row.metric_values[0].value)
-        active_users += int(row.metric_values[1].value)
-        conversions += int(row.metric_values[2].value)
-    return {"sessions": sessions, "activeUsers": active_users, "conversions": conversions}
+        engaged_sessions += int(row.metric_values[1].value)
+        new_users += int(row.metric_values[2].value)
+        active_users += int(row.metric_values[3].value)
+        key_events += int(row.metric_values[4].value)
+    bounce_rate = round(1 - (engaged_sessions / sessions), 4) if sessions else 0
+    return {
+        "sessions": sessions,
+        "engagedSessions": engaged_sessions,
+        "bounceRate": bounce_rate,
+        "newUsers": new_users,
+        "activeUsers": active_users,
+        "keyEvents": key_events,
+    }
 
 
 def ga4_daily_totals(client, property_id, start, end, exclude_hostnames=None):
     """Same as ga4_totals, but broken out by day instead of collapsed into
     one number — powers the day-by-day GA4 numbers in the Trend chart and the
-    Day-vs-Day Executive Summary. Returns {iso_date: {"sessions": .., ...}}."""
+    Day-vs-Day Executive Summary. Also organic-search-only; see ga4_totals
+    for why bounceRate is derived per day rather than requested directly.
+    Returns {iso_date: {"sessions": .., "engagedSessions": .., ...}}."""
     exclude_hostnames = exclude_hostnames or []
     request = RunReportRequest(
         property=f"properties/{property_id}",
         date_ranges=[DateRange(start_date=start.isoformat(), end_date=end.isoformat())],
-        dimensions=[Dimension(name="date"), Dimension(name="country"), Dimension(name="hostName")],
-        metrics=[Metric(name="sessions"), Metric(name="activeUsers"), Metric(name="conversions")],
+        dimensions=[
+            Dimension(name="date"),
+            Dimension(name="country"),
+            Dimension(name="hostName"),
+            Dimension(name="sessionDefaultChannelGroup"),
+        ],
+        metrics=[
+            Metric(name="sessions"),
+            Metric(name="engagedSessions"),
+            Metric(name="newUsers"),
+            Metric(name="activeUsers"),
+            Metric(name="keyEvents"),
+        ],
     )
     resp = client.run_report(request)
     by_date = {}
@@ -278,12 +368,20 @@ def ga4_daily_totals(client, property_id, start, end, exclude_hostnames=None):
             continue
         if row.dimension_values[2].value in exclude_hostnames:
             continue
+        if row.dimension_values[3].value != GA4_ORGANIC_CHANNEL:
+            continue
         raw_d = row.dimension_values[0].value  # GA4 returns dates as "YYYYMMDD"
         iso_d = f"{raw_d[0:4]}-{raw_d[4:6]}-{raw_d[6:8]}"  # reformat to "YYYY-MM-DD" to match Search Console's format
-        entry = by_date.setdefault(iso_d, {"sessions": 0, "activeUsers": 0, "conversions": 0})
+        entry = by_date.setdefault(iso_d, {"sessions": 0, "engagedSessions": 0, "newUsers": 0, "activeUsers": 0, "keyEvents": 0})
         entry["sessions"] += int(row.metric_values[0].value)
-        entry["activeUsers"] += int(row.metric_values[1].value)
-        entry["conversions"] += int(row.metric_values[2].value)
+        entry["engagedSessions"] += int(row.metric_values[1].value)
+        entry["newUsers"] += int(row.metric_values[2].value)
+        entry["activeUsers"] += int(row.metric_values[3].value)
+        entry["keyEvents"] += int(row.metric_values[4].value)
+    # bounceRate has to be computed per day AFTER summing (see the docstring
+    # on ga4_totals for why it can't just be requested as a metric directly).
+    for entry in by_date.values():
+        entry["bounceRate"] = round(1 - (entry["engagedSessions"] / entry["sessions"]), 4) if entry["sessions"] else 0
     return by_date
 
 
@@ -349,8 +447,9 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
     daily_gsc = sorted(group_by(tc, "date"), key=lambda r: r["date"])
     ga4_daily = ga4_daily_totals(ga4_client, brand["ga4_property_id"], start, end, exclude_hostnames=exclude_ga4_hostnames)
     daily = []
+    ga4_daily_default = {"sessions": 0, "engagedSessions": 0, "bounceRate": 0, "newUsers": 0, "activeUsers": 0, "keyEvents": 0}
     for row in daily_gsc:
-        g = ga4_daily.get(row["date"], {"sessions": 0, "activeUsers": 0, "conversions": 0})
+        g = ga4_daily.get(row["date"], ga4_daily_default)
         daily.append({
             "date": row["date"],
             "clicks": row["clicks"],
@@ -358,8 +457,11 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
             "ctr": row["ctr"],
             "position": row["position"],
             "sessions": g["sessions"],
+            "engagedSessions": g["engagedSessions"],
+            "bounceRate": g["bounceRate"],
+            "newUsers": g["newUsers"],
             "activeUsers": g["activeUsers"],
-            "conversions": g["conversions"],
+            "keyEvents": g["keyEvents"],
         })
 
     # --- Daily DETAIL (expensive, only for recent months — powers day-vs-day tables) ---
@@ -386,6 +488,15 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
 
     ga4 = ga4_totals(ga4_client, brand["ga4_property_id"], start, end, exclude_hostnames=exclude_ga4_hostnames)
 
+    # --- GA4 audience/behavior breakdowns (organic search only, current period) ---
+    interests = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "brandingInterest", ["activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=20)
+    key_events_raw = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "eventName", ["keyEvents"], exclude_hostnames=exclude_ga4_hostnames, top_n=50)
+    key_events_by_name = [r for r in key_events_raw if r["keyEvents"] > 0]  # drop events that aren't marked as key events (0 count)
+    page_titles = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "pageTitle", ["screenPageViews"], exclude_hostnames=exclude_ga4_hostnames, top_n=30)
+    gender = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "userGender", ["newUsers", "activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10)
+    operating_systems = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "operatingSystem", ["activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10)
+    device_users = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "deviceCategory", ["newUsers", "activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10)
+
     # This dict's shape is the contract the report page (app.js) expects —
     # if you rename or remove a key here, the matching code in app.js needs
     # the same change, or that part of the report will silently break.
@@ -407,6 +518,12 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
         "daily": daily,
         "daily_detail": daily_detail,   # null for months outside the detail window
         "ga4": ga4,
+        "interests": interests,
+        "key_events_by_name": key_events_by_name,
+        "page_titles": page_titles,
+        "gender": gender,
+        "operating_systems": operating_systems,
+        "device_users": device_users,
     }
 
 
