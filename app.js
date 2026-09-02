@@ -1688,7 +1688,7 @@ async function renderBrand(brand) {
 
   months = data.months;
   document.documentElement.style.setProperty("--accent", data.color);
-  document.getElementById("brand-title").textContent = `${data.brand.toUpperCase()} — SEO Dashboard`;
+  document.getElementById("brand-title").textContent = `${data.brand.toUpperCase()} | SEO Dashboard`;
   document.getElementById("meta-line").textContent = `Data last refreshed ${data.generated_at}`;
 
   populateMonthPickers();
@@ -1703,12 +1703,15 @@ async function renderBrand(brand) {
 // page fresh: resets Compare-by back to Month mode (in case you'd
 // switched to Day or Quarter), and scrolls to the top — not just a brand
 // swap, a full reset back to the default view.
-document.getElementById("brand-tabs").addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-brand]");
-  if (!btn) return;
-  document.querySelectorAll("#brand-tabs button").forEach(b => b.classList.remove("active"));
-  btn.classList.add("active");
-  currentBrand = btn.dataset.brand;
+// Shared "go home" reset: Month mode, default period, scroll to top —
+// used both when switching brands AND when clicking the title text
+// itself (a plain-language "click the logo to go home" pattern). Doesn't
+// force a data re-fetch when the brand isn't actually changing —
+// loadBrand() already caches per-brand data, so calling renderBrand()
+// again for the SAME brand just re-reads the cache, no extra network call.
+function goHome(brand) {
+  document.querySelectorAll("#brand-tabs button").forEach(b => b.classList.toggle("active", b.dataset.brand === brand));
+  currentBrand = brand;
 
   document.getElementById("compare-mode").value = "month";
   document.getElementById("month-controls").style.display = "flex";
@@ -1717,7 +1720,15 @@ document.getElementById("brand-tabs").addEventListener("click", (e) => {
 
   window.scrollTo({ top: 0, behavior: "smooth" });
   renderBrand(currentBrand);
+}
+
+document.getElementById("brand-tabs").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-brand]");
+  if (!btn) return;
+  goHome(btn.dataset.brand);
 });
+
+document.getElementById("brand-title").addEventListener("click", () => goHome(currentBrand));
 
 // Switching the Compare-by dropdown between "Month" and "Day" swaps which
 // pair of dropdowns is visible, then re-renders using whichever is now shown.
