@@ -49,6 +49,9 @@ BRANDS = [
         # excluded from every GSC row server-side, and every GA4 row by hostname,
         # before any total/keyword/page/country/device number is calculated.
         "exclude_page_regex": r"^https?://(my|files)\.anzocapital\.com(/|\?|$)",
+        # Anzo-only conversion funnel — exact GA4 event names, case-sensitive.
+        # Leave unset (or omit the key) for a brand that shouldn't show a funnel.
+        "funnel_stages": ["CRM_Lead", "CRM_CompletedRealRegistration", "account_approved", "ftd"],
         "exclude_ga4_hostnames": ["my.anzocapital.com", "files.anzocapital.com"],
     },
     {
@@ -64,6 +67,16 @@ LOOKBACK_MONTHS = 16       # total months of MONTHLY-level history kept (Search 
 REFRESH_MONTHS = 3         # only these most-recent months get re-fetched each day; older ones are carried forward
 DAILY_DETAIL_MONTHS = 3    # only these most-recent months get full per-day keyword/page/country/device detail
 GSC_LAG_DAYS = 3           # Search Console data has a reporting lag of a couple of days
+
+# Set by the "full_refresh" checkbox when the workflow is triggered by hand
+# (see .github/workflows/daily-update.yml) — forces every month to be
+# re-fetched instead of carried forward, for the current run only. Use this
+# after adding a new field to a month's data (like this whole GA4-organic
+# rework), so older months actually get the new field instead of silently
+# lacking it until they naturally re-enter the REFRESH_MONTHS window months
+# from now. The scheduled daily run never sets this — it always does the
+# normal fast incremental refresh.
+FULL_REFRESH = os.environ.get("FULL_REFRESH", "").strip().lower() in ("true", "1", "yes")
 
 # How many rows to keep per bucket. Kept smaller for daily detail since it
 # multiplies by ~30 days a month — a big number here directly inflates the
@@ -240,15 +253,17 @@ def group_by_date_then(rows, sub_key, top_n):
 GA4_ORGANIC_CHANNEL = "Organic Search"
 
 
-def ga4_breakdown(client, property_id, start, end, dimension_name, metric_names, exclude_hostnames=None, top_n=30):
+def ga4_breakdown(client, property_id, start, end, dimension_name, metric_names, exclude_hostnames=None, top_n=30, sort_metric=None):
     """Generic GA4 breakdown puller: groups ORGANIC-SEARCH-ONLY traffic by
     one dimension (brandingInterest, eventName, pageTitle, userGender,
     operatingSystem, or deviceCategory), summing the given metric(s), with
     the same country/hostname exclusion and organic-channel filter as every
-    other GA4 number in this file. Powers Interests, Key Events by Event
-    Name, Page Title and Screen, Gender, Operating System, and Device
-    Category — all "current period only" snapshots, same pattern as
-    Position Distribution / CTR Opportunities on the Search Console side.
+    other GA4 number in this file. sort_metric picks which of metric_names
+    ranks the results — defaults to the last one in the list if not given.
+    Powers Interests, Key Events by Event Name, Page Title and Screen,
+    Gender, Operating System, and Device Category — all "current period
+    only" snapshots, same pattern as Position Distribution / CTR
+    Opportunities on the Search Console side.
 
     userGender and brandingInterest are two of GA4's "potentially
     thresholded" dimensions — Google may suppress some rows entirely to
@@ -282,7 +297,7 @@ def ga4_breakdown(client, property_id, start, end, dimension_name, metric_names,
         for i, m in enumerate(metric_names):
             entry[m] += int(row.metric_values[i].value)
     out = [{"label": k, **v} for k, v in totals.items()]
-    out.sort(key=lambda r: r[metric_names[-1]], reverse=True)  # sorts by the last (primary) metric
+    out.sort(key=lambda r: r[sort_metric or metric_names[-1]], reverse=True)
     return out[:top_n]
 
 
@@ -489,10 +504,28 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
     ga4 = ga4_totals(ga4_client, brand["ga4_property_id"], start, end, exclude_hostnames=exclude_ga4_hostnames)
 
     # --- GA4 audience/behavior breakdowns (organic search only, current period) ---
-    interests = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "brandingInterest", ["activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=20)
-    key_events_raw = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "eventName", ["keyEvents"], exclude_hostnames=exclude_ga4_hostnames, top_n=50)
+    key_events_raw = ga4_breakdown(
+        ga4_client, brand["ga4_property_id"], start, end, "eventName",
+        ["eventCount", "keyEvents"], exclude_hostnames=exclude_ga4_hostnames, top_n=200, sort_metric="keyEvents",
+    )
     key_events_by_name = [r for r in key_events_raw if r["keyEvents"] > 0]  # drop events that aren't marked as key events (0 count)
-    page_titles = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "pageTitle", ["screenPageViews"], exclude_hostnames=exclude_ga4_hostnames, top_n=30)
+
+    # --- Funnel (Anzo only — see funnel_stages in BRANDS config) ---
+    # Reuses key_events_raw's eventCount rather than a separate API call —
+    # eventCount (not keyEvents) is used here since a funnel stage should
+    # count every time the event fired, not just the subset flagged as a
+    # "key event" in GA4's settings.
+    funnel_stage_names = brand.get("funnel_stages")
+    funnel = []
+    if funnel_stage_names:
+        event_count_lookup = {r["label"]: r["eventCount"] for r in key_events_raw}
+        funnel = [{"stage": name, "count": event_count_lookup.get(name, 0)} for name in funnel_stage_names]
+
+    page_titles = ga4_breakdown(
+        ga4_client, brand["ga4_property_id"], start, end, "pageTitle",
+        ["screenPageViews", "newUsers", "activeUsers", "keyEvents"],
+        exclude_hostnames=exclude_ga4_hostnames, top_n=30, sort_metric="screenPageViews",
+    )
     gender = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "userGender", ["newUsers", "activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10)
     operating_systems = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "operatingSystem", ["activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10)
     device_users = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "deviceCategory", ["newUsers", "activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10)
@@ -518,8 +551,8 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
         "daily": daily,
         "daily_detail": daily_detail,   # null for months outside the detail window
         "ga4": ga4,
-        "interests": interests,
         "key_events_by_name": key_events_by_name,
+        "funnel": funnel,   # [] for any brand without funnel_stages configured (e.g. DLSM)
         "page_titles": page_titles,
         "gender": gender,
         "operating_systems": operating_systems,
@@ -561,7 +594,7 @@ def build_brand_report(brand, gsc_service, ga4_client, existing_months_by_key):
     for i in range(LOOKBACK_MONTHS):
         y, m = shift_month(today.year, today.month, -i)
         key = (y, m)
-        within_refresh_window = i < REFRESH_MONTHS
+        within_refresh_window = FULL_REFRESH or i < REFRESH_MONTHS
         within_daily_detail_window = i < DAILY_DETAIL_MONTHS
         existing = existing_months_by_key.get(key)
 
