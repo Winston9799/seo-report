@@ -729,17 +729,33 @@ let trendChart = null;
 // renderTrendChart itself doesn't need to know or care which — it just
 // plots two series against two labels, so it can never accidentally end up
 // plotting the same underlying data twice under two different-looking labels.
+// "2026-08-18" -> "Aug 18". Used for the Trend chart's x-axis labels.
+function fmtShortDate(iso) {
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function renderTrendChart(currSeries, currLabel, compSeries, compLabel) {
   const metric = document.getElementById("metric-select").value;
-  // The two series can have different lengths (Month mode: 28-31 days;
-  // Day mode: always TREND_DAY_WINDOW), so the x-axis is "Day 1, Day 2, ..."
-  // rather than actual calendar dates — that's what lets two differently-
-  // dated windows line up at the same x position for comparison.
   const maxDays = Math.max(currSeries.length, compSeries.length, 1);
-  const labels = Array.from({ length: maxDays }, (_, i) => `Day ${i + 1}`);
+
+  // The x-axis shows the CURRENT period's actual calendar dates (e.g.
+  // "Aug 18") rather than a generic "Day 1, Day 2, ..." position — real
+  // dates are more useful than an abstract offset, especially in Day mode
+  // where "Day 1 to Day 14" told you nothing about which days those
+  // actually were. The two periods can still land on different real dates
+  // at the same x position (Month/Quarter mode compares different actual
+  // months), which is why each series ALSO carries its own real date into
+  // the tooltip below — hovering always shows the true date for whichever
+  // line you're looking at, even when it differs from the axis label.
+  const labels = Array.from({ length: maxDays }, (_, i) => {
+    const d = (currSeries[i] && currSeries[i].date) || (compSeries[i] && compSeries[i].date);
+    return d ? fmtShortDate(d) : `Day ${i + 1}`;
+  });
 
   const currValues = labels.map((_, i) => (currSeries[i] ? currSeries[i][metric] : null));
   const compValues = labels.map((_, i) => (compSeries[i] ? compSeries[i][metric] : null));
+  const currDates = labels.map((_, i) => (currSeries[i] ? currSeries[i].date : null));
+  const compDates = labels.map((_, i) => (compSeries[i] ? compSeries[i].date : null));
 
   // Read the live brand accent color so the chart's current-period line
   // always matches whichever brand is selected, without hardcoding a color.
@@ -753,6 +769,7 @@ function renderTrendChart(currSeries, currLabel, compSeries, compLabel) {
       {
         label: `${currLabel} (${metric})`,
         data: currValues,
+        _dates: currDates,   // custom field, ignored by Chart.js's own rendering — read back out in the tooltip callback below
         borderColor: accent,
         backgroundColor: accent,
         borderWidth: 2,
@@ -762,6 +779,7 @@ function renderTrendChart(currSeries, currLabel, compSeries, compLabel) {
       {
         label: `${compLabel} (${metric})`,
         data: compValues,
+        _dates: compDates,
         borderColor: muted,
         backgroundColor: muted,
         borderWidth: 2,
@@ -774,7 +792,11 @@ function renderTrendChart(currSeries, currLabel, compSeries, compLabel) {
 
   if (trendChart) {
     // Chart already exists (brand switch or month/day change) — just feed
-    // it new data rather than tearing down and rebuilding the canvas.
+    // it new data rather than tearing down and rebuilding the canvas. The
+    // tooltip callback below reads dates from context.dataset._dates at
+    // hover-time, not from a closure, so it stays correct across updates
+    // like this one rather than getting stuck on whatever data existed
+    // when the chart was first created.
     trendChart.data = data;
     trendChart.update();
   } else {
@@ -788,7 +810,18 @@ function renderTrendChart(currSeries, currLabel, compSeries, compLabel) {
           y: { beginAtZero: metric !== "position" }, // position charts look wrong pinned to zero (lower is better)
           x: { ticks: { maxTicksLimit: 10 } },
         },
-        plugins: { legend: { position: "bottom", labels: { boxWidth: 12 } } },
+        plugins: {
+          legend: { position: "bottom", labels: { boxWidth: 12 } },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const dateStr = context.dataset._dates && context.dataset._dates[context.dataIndex];
+                const dateBit = dateStr ? ` (${fmtShortDate(dateStr)})` : "";
+                return `${context.dataset.label}${dateBit}: ${context.formattedValue}`;
+              },
+            },
+          },
+        },
       },
     });
   }
