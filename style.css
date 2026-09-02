@@ -308,7 +308,7 @@ header {
   color: var(--white);
   border: 1px solid rgba(255,255,255,0.25);
   border-radius: 9999px;
-  padding: 7px 16px;
+  padding: 7px 30px 7px 16px;   /* extra right padding — the native dropdown arrow otherwise sits flush against the pill's edge */
   font-family: inherit;
   font-size: 15px;
   cursor: pointer;
@@ -328,7 +328,7 @@ header {
   color: var(--ink);
   border: 1px solid var(--border);
   border-radius: 9999px;
-  padding: 7px 16px;
+  padding: 7px 30px 7px 16px;   /* extra right padding — matches .month-picker select, keeps the dropdown arrow off the edge */
   font-family: inherit;
   font-size: 15px;
   cursor: pointer;
