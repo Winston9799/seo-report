@@ -132,12 +132,24 @@
 <div class="container">
 
   <!-- ================================================================
+       HERO BANNER — brand video (Anzo) or image (DLSM), above everything
+       else. Purely a static branding asset, not fetched data — see
+       HERO_MEDIA in app.js for the per-brand config, and media/README.md
+       for exactly which files to add. Fails silently (hides itself,
+       rather than showing a broken video/image icon) if the file doesn't
+       exist yet. Filled in by renderHero() in app.js.
+       ================================================================ -->
+  <section style="margin-top:32px;">
+    <div class="hero-banner" id="hero-media"></div>
+  </section>
+
+  <!-- ================================================================
        TREND CHART
        Always plots full months of daily data (see renderTrendChart in
        app.js for why it doesn't try to show a single day's "trend").
        The dropdown swaps which metric the two lines plot.
        ================================================================ -->
-  <section id="section-trend" style="margin-top:32px;">
+  <section id="section-trend">
     <div class="section-head">
       <h2>Trend</h2>
       <select id="metric-select" class="month-picker-inline">
