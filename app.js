@@ -17,7 +17,7 @@ const SWING_MIN_BASELINE = 10;
 // For genuine access control, put this behind Cloudflare Access or similar.
 // ---------------------------------------------------------------------------
 
-const REPORT_PASSWORD = "changeme"; // <-- change this to your own passphrase before sharing the link
+const REPORT_PASSWORD = "mkt11"; // <-- change this to your own passphrase before sharing the link
 
 // Hides the password screen and reveals the actual report underneath it.
 function unlockReport() {
