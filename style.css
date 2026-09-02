@@ -248,7 +248,15 @@ body {
   max-width: 1320px;   /* was 1080px — the two-column tables (Pages, Keywords) need more room for 6 columns each */
   flex: 1;
   min-width: 0;         /* same grid/flex-shrink fix used elsewhere in this file — see .two-col's comment */
-  padding: 0 0 96px;
+  /* This bottom padding needs to be generous, not just decorative: without
+     enough empty space below the LAST section, the browser hits the
+     bottom of the page before it can scroll that section up far enough
+     to satisfy its scroll-margin-top — so clicking the nav link for
+     whatever section happens to be last (Device & Audience) would land
+     short, leaving the section above it (Top Countries) still dominating
+     the view. 50vh scales with screen size so there's always enough room
+     to scroll into, on any device. */
+  padding: 0 0 50vh;
 }
 
 /* Jump-to-section links, sticky alongside the report while scrolling.
@@ -270,7 +278,7 @@ body {
 
 .side-nav a {
   padding: 7px 12px;
-  border-radius: var(--radius-base);
+  border-radius: 9999px;   /* was var(--radius-base) (4px) — now matches the full pill shape used everywhere else (dropdowns, tabs, badges) */
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
