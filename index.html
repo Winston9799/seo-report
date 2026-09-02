@@ -28,15 +28,15 @@
 <div id="password-gate" class="password-gate">
   <div class="password-box">
     <div class="password-title">SEO Dashboard</div>
-    <p class="password-copy">Enter your password to view this report.</p>
+    <p class="password-copy">Enter the password to view this report.</p>
     <div class="password-field">
-      <input type="password" id="password-input" class="password-input" placeholder="Password" autofocus>
+      <input type="password" id="password-input" class="password-input" placeholder="password" autofocus>
       <button type="button" id="password-toggle" class="password-toggle" aria-label="Show password">
         <svg id="password-eye-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
     </div>
     <button id="password-submit" class="password-submit">Unlock</button>
-    <p class="password-error" id="password-error" style="display:none;">Incorrect password — try again or reach out to Winston.</p>
+    <p class="password-error" id="password-error" style="display:none;">Incorrect password — try again or contact Winston</p>
   </div>
 </div>
 
@@ -355,6 +355,9 @@
         <div class="donut-card">
           <canvas id="device-users-chart" height="200"></canvas>
           <div class="donut-legend" id="device-users-legend"></div>
+          <div class="chart-unavailable" id="device-users-unavailable" style="display:none;">
+            This data isn't available in Day mode — GA4 device breakdowns are only computed at the monthly level, not daily. Switch to Month or Quarter mode to see this chart.
+          </div>
         </div>
       </div>
       <div>
@@ -362,6 +365,9 @@
         <div class="donut-card">
           <canvas id="os-chart" height="200"></canvas>
           <div class="donut-legend" id="os-legend"></div>
+          <div class="chart-unavailable" id="os-unavailable" style="display:none;">
+            This data isn't available in Day mode — GA4 operating system breakdowns are only computed at the monthly level, not daily. Switch to Month or Quarter mode to see this chart.
+          </div>
         </div>
       </div>
       <div>
