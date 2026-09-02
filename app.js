@@ -17,7 +17,7 @@ const SWING_MIN_BASELINE = 10;
 // For genuine access control, put this behind Cloudflare Access or similar.
 // ---------------------------------------------------------------------------
 
-const REPORT_PASSWORD = "mkt11"; // <-- change this to your own passphrase before sharing the link
+const REPORT_PASSWORD = "changeme"; // <-- change this to your own passphrase before sharing the link
 
 // Hides the password screen and reveals the actual report underneath it.
 function unlockReport() {
@@ -334,7 +334,7 @@ function buildDailyIndex() {
   return idx;
 }
 
-const TREND_DAY_WINDOW = 14; // how many trailing days the Trend chart shows in Day mode
+const TREND_DAY_WINDOW = 3; // how many trailing days the Trend chart shows in Day mode — e.g. picking Aug 30 shows Aug 28-30
 
 // Builds a `days`-long daily series ENDING ON dateStr (inclusive) — e.g.
 // trailingWindow("2026-07-31", 14) returns Jul 18 through Jul 31. This is
@@ -1424,6 +1424,35 @@ function showEmptyState(brandLabel) {
 // dropdowns or the day dropdowns depending on the toggle), then calls every
 // render function in turn. Every section of the report ultimately traces
 // back to this one function running.
+// Scroll-spy: highlights whichever side-nav link corresponds to the
+// section currently at the top of the viewport. Walks the nav links in
+// document order and keeps the LAST one whose section top has already
+// been scrolled past — that's always the section you're currently
+// "inside". Skips sections that don't exist or are hidden (offsetParent
+// is null for display:none elements — e.g. the funnel section on DLSM),
+// so a hidden section's stale position can never wrongly match. Runs on
+// every scroll (so it stays live during both manual scrolling AND the
+// smooth-scroll animation a nav click triggers — no separate click
+// handler needed, this one mechanism covers both), and once after every
+// renderAll() too, since switching brand or period can shift section
+// positions (e.g. DLSM's page is shorter without the funnel section).
+function updateActiveNavLink() {
+  const navLinks = document.querySelectorAll(".side-nav a");
+  if (navLinks.length === 0) return;
+  const scrollPos = window.scrollY + 120; // roughly matches the sticky header's height, so a section counts as "current" once it's scrolled just past the header, not only once it hits the very top of the page
+  let current = null;
+  navLinks.forEach(a => {
+    const id = a.getAttribute("href").slice(1);
+    const el = document.getElementById(id);
+    if (!el || el.offsetParent === null) return;
+    if (el.offsetTop <= scrollPos) current = a;
+  });
+  navLinks.forEach(a => a.classList.remove("active"));
+  if (current) current.classList.add("active");
+}
+
+window.addEventListener("scroll", updateActiveNavLink, { passive: true });
+
 function renderAll() {
   const mode = document.getElementById("compare-mode").value;
   let curr, comp, currTrendSeries, currTrendLabel, compTrendSeries, compTrendLabel;
@@ -1433,7 +1462,7 @@ function renderAll() {
     const d2 = document.getElementById("day-compare").value;
     curr = buildDaySnapshot(d1);
     comp = buildDaySnapshot(d2);
-    // Each side gets its OWN 14-day trailing window ending on that exact
+    // Each side gets its OWN trailing window (TREND_DAY_WINDOW days) ending on that exact
     // selected day — never the enclosing month's full array. That's what
     // guarantees Jul 31 vs Jul 3 (same month) still show genuinely
     // different data instead of the bug where both sides silently plotted
@@ -1491,6 +1520,7 @@ function renderAll() {
   renderCountryCharts(curr);
   renderCountries(curr, comp);
   renderDeviceSplit(curr);
+  updateActiveNavLink();
 }
 
 // Fills the two Month dropdowns from the currently loaded brand's month
@@ -1549,10 +1579,54 @@ function populateQuarterPickers() {
   compareSel.value = quarters.length > 1 ? quarters[1].key : quarters[0].key;
 }
 
+// Per-brand hero banner config — purely a static branding asset, not
+// fetched data, so it lives here rather than in data/<brand>.json. Video
+// needs 3 attributes to reliably autoplay across browsers (muted,
+// playsinline, and autoplay itself — Safari in particular won't autoplay
+// video with sound, or without playsinline on mobile). Switching a brand
+// from image to video later (e.g. once DLSM has one) is just editing this
+// one object — no HTML/CSS changes needed, renderHero() below already
+// handles both types.
+const HERO_MEDIA = {
+  anzo: { type: "video", src: "media/anzo-hero.mp4", poster: "media/anzo-hero.jpg" },
+  dlsm: { type: "image", src: "media/dlsm-hero.jpg" },
+};
+
+// Fails silently — if the configured file doesn't exist yet (see
+// media/README.md), the banner just collapses to nothing rather than
+// showing a broken-image/broken-video icon.
+function renderHero(brand) {
+  const container = document.getElementById("hero-media");
+  const media = HERO_MEDIA[brand];
+  if (!media) {
+    container.parentElement.style.display = "none";
+    return;
+  }
+  container.parentElement.style.display = "";
+  // Browsers cache video/image files aggressively by URL — without this,
+  // replacing anzo-hero.mp4 with a new video (same filename) could leave
+  // visitors seeing the OLD cached one for a long time. This query param
+  // changes once per calendar day, so a replaced file is guaranteed to
+  // show up within a day, while repeat page loads on the SAME day still
+  // benefit from normal caching instead of re-downloading a multi-MB
+  // video every single time.
+  const cacheBust = new Date().toISOString().slice(0, 10);
+  if (media.type === "video") {
+    container.innerHTML = `
+      <video autoplay muted loop playsinline ${media.poster ? `poster="${media.poster}?v=${cacheBust}"` : ""} onerror="this.closest('section').style.display='none'">
+        <source src="${media.src}?v=${cacheBust}" type="video/mp4">
+      </video>`;
+  } else {
+    container.innerHTML = `<img src="${media.src}?v=${cacheBust}" alt="${brand.toUpperCase()} banner" onerror="this.closest('section').style.display='none'">`;
+  }
+}
+
 // Runs whenever the selected brand changes (including on first page load):
 // fetches that brand's JSON, sets the header's accent color and title to
 // match, rebuilds all three sets of dropdowns, and triggers the first render.
 async function renderBrand(brand) {
+  renderHero(brand); // updates immediately, independent of whether the report data below loads successfully
+
   const data = await loadBrand(brand);
   if (!data || !data.months || data.months.length === 0) {
     showEmptyState(brand.toUpperCase());

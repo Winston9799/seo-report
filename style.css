@@ -218,7 +218,7 @@
 
 * { box-sizing: border-box; }
 
-html, body { overflow-x: clip; }  /* safety net: nothing should ever be able to widen the whole page — see .table-scroll below for the actual fix. Uses "clip" specifically, not "hidden" — hidden triggers a CSS quirk where the OTHER axis silently becomes "auto" too, which was interfering with the side-nav's position: sticky further down this file. */
+html, body { overflow-x: clip; overflow-y: visible; }  /* safety net against horizontal overflow — see .table-scroll below for the real fix. Both axes are declared explicitly on purpose: leaving overflow-y unset while overflow-x is non-visible triggers a CSS quirk where the browser silently treats the unset axis as "auto" too, which was still breaking the side-nav's position: sticky even after switching hidden->clip last time (clip is ALSO a non-visible value, so it didn't dodge the quirk by itself — only declaring both axes does). */
 html { scroll-behavior: smooth; }   /* makes the side-nav's jump links glide instead of snapping instantly */
 
 
@@ -278,7 +278,13 @@ body {
   transition: background 0.15s, color 0.15s;
 }
 
-.side-nav a:hover { background: var(--white); color: var(--ink); }
+.side-nav a:hover { background: var(--accent); color: var(--white); }
+
+/* The "currently viewing" section, kept in sync with scroll position by
+   updateActiveNavLink() in app.js — also set instantly on click, since
+   clicking triggers the browser's own smooth-scroll, and this same
+   scroll-driven logic picks it up in real time as that scroll plays out. */
+.side-nav a.active { background: var(--accent); color: var(--white); font-weight: 700; }
 
 @media (max-width: 1050px) {
   .side-nav { display: none; }
@@ -426,6 +432,28 @@ header {
    ============================================================ */
 
 section { margin-top: 48px; }
+
+/* ---------- Hero banner (brand video/image, above everything else) ---------- */
+
+.hero-banner {
+  width: 100%;
+  height: 320px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--ink);   /* visible while media loads, or as a neutral fallback if it's missing entirely */
+}
+
+.hero-banner video,
+.hero-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;   /* fills the banner without distorting aspect ratio, cropping edges as needed */
+  display: block;
+}
+
+@media (max-width: 700px) {
+  .hero-banner { height: 200px; }
+}
 
 .section-head {
   display: flex;
@@ -707,13 +735,27 @@ tr.row-swing-down:hover td { background: rgba(219, 86, 20, 0.15); }
   grid-template-columns: repeat(3, 1fr);
   gap: 20px;
 }
-.three-col > div { min-width: 0; }
+.three-col > div {
+  min-width: 0;
+  /* The grid row itself already stretches all 3 columns to match the
+     tallest one (CSS Grid's default align-items: stretch) — but that only
+     affects the invisible grid CELL, not the visible bordered .donut-card
+     box inside it, which was just sizing to its own content (so a chart
+     with a 6-row legend, like OS, ended up visibly taller than one with a
+     3-row legend). Making this a flex column, with .donut-card set to
+     flex: 1 below, is what makes the actual bordered boxes match heights
+     too, not just their invisible containers.
+   */
+  display: flex;
+  flex-direction: column;
+}
 
 @media (max-width: 700px) {
   .three-col { grid-template-columns: 1fr; }
 }
 
 .donut-card {
+  flex: 1;
   background: var(--white);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
