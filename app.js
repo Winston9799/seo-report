@@ -1151,27 +1151,23 @@ function renderKeyEventsByName(curr) {
 // Hand-built funnel (Chart.js has no native funnel chart type) — Anzo only;
 // hidden entirely for any brand with no funnel data (e.g. DLSM, which has
 // no funnel_stages configured in fetch_data.py, so curr.funnel is just []).
-function renderFunnel(curr) {
-  const wrapper = document.getElementById("funnel-wrapper");
-  const navLink = document.getElementById("nav-link-funnel");
-  const rows = curr.funnel || [];
-  if (rows.length === 0) {
-    wrapper.style.display = "none";
-    if (navLink) navLink.style.display = "none";
-    return;
+// Builds the markup for ONE funnel (used for both the single-funnel case
+// and each half of the side-by-side case below) — a period label, then
+// each stage's bar, count, % of top-of-funnel, and drop-off from the
+// previous stage.
+function buildFunnelColumnHtml(rows, periodLabel) {
+  if (!rows || rows.length === 0) {
+    return `<div class="funnel-column"><div class="funnel-column-label">${escapeHtml(periodLabel)}</div><div class="funnel-empty">No funnel data for this period</div></div>`;
   }
-  wrapper.style.display = "";
-  if (navLink) navLink.style.display = "";
-
   const top = rows[0].count || 1;
-  const html = rows.map((stage, i) => {
+  const stagesHtml = rows.map((stage, i) => {
     const funnelPct = (stage.count / top) * 100;
     const barWidth = Math.max(funnelPct, 4); // keeps very small bars visibly present rather than a sliver
     const prevCount = i > 0 ? rows[i - 1].count : null;
     const dropoffPct = prevCount ? ((prevCount - stage.count) / prevCount) * 100 : null;
     const arrow = i > 0 ? `<div class="funnel-arrow">▼</div>` : "";
     const dropoffHtml = dropoffPct !== null
-      ? `<span class="funnel-dropoff">Drop-off: <b>${dropoffPct.toFixed(1)}%</b> vs. previous stage</span>`
+      ? `<span class="funnel-dropoff">Drop-off: <b>${dropoffPct.toFixed(1)}%</b></span>`
       : "";
     return `
       ${arrow}
@@ -1187,7 +1183,39 @@ function renderFunnel(curr) {
         </div>
       </div>`;
   }).join("");
-  document.getElementById("funnel-container").innerHTML = html;
+  return `<div class="funnel-column"><div class="funnel-column-label">${escapeHtml(periodLabel)}</div>${stagesHtml}</div>`;
+}
+
+// Shows ONE funnel when curr and comp are the same period (comparing a
+// period to itself would just be two identical funnels side by side), and
+// TWO side-by-side funnels — current period vs. compare period — whenever
+// they differ, so you can visually compare drop-off between two different
+// months/days/quarters directly. Hidden entirely (Anzo only) if neither
+// side has any funnel data at all.
+function renderFunnel(curr, comp) {
+  const wrapper = document.getElementById("funnel-wrapper");
+  const navLink = document.getElementById("nav-link-funnel");
+  const currRows = curr.funnel || [];
+  const compRows = comp.funnel || [];
+
+  if (currRows.length === 0 && compRows.length === 0) {
+    wrapper.style.display = "none";
+    if (navLink) navLink.style.display = "none";
+    return;
+  }
+  wrapper.style.display = "";
+  if (navLink) navLink.style.display = "";
+
+  const container = document.getElementById("funnel-container");
+  const samePeriod = curr.label === comp.label;
+
+  if (samePeriod) {
+    container.className = "funnel-single";
+    container.innerHTML = buildFunnelColumnHtml(currRows, curr.label);
+  } else {
+    container.className = "funnel-split";
+    container.innerHTML = buildFunnelColumnHtml(currRows, curr.label) + buildFunnelColumnHtml(compRows, comp.label);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1439,7 +1467,12 @@ function showEmptyState(brandLabel) {
 function updateActiveNavLink() {
   const navLinks = document.querySelectorAll(".side-nav a");
   if (navLinks.length === 0) return;
-  const scrollPos = window.scrollY + 120; // roughly matches the sticky header's height, so a section counts as "current" once it's scrolled just past the header, not only once it hits the very top of the page
+  // This offset MUST match the section[id] { scroll-margin-top: 130px; }
+  // value in style.css exactly — a mismatch here (this used to be 120)
+  // means a section can finish scrolling into its "landed" position while
+  // still not quite counting as scrolled-past by this check, leaving the
+  // PREVIOUS nav link highlighted instead of the one just clicked.
+  const scrollPos = window.scrollY + 130;
   let current = null;
   navLinks.forEach(a => {
     const id = a.getAttribute("href").slice(1);
@@ -1510,7 +1543,7 @@ function renderAll() {
   renderOsChart(curr);
   renderPageTitles(curr);
   renderKeyEventsByName(curr);
-  renderFunnel(curr);
+  renderFunnel(curr, comp);
   renderSplit(curr);
   renderPositionDistribution(curr);
   renderCtrOpportunities(curr);
@@ -1587,22 +1620,25 @@ function populateQuarterPickers() {
 // from image to video later (e.g. once DLSM has one) is just editing this
 // one object — no HTML/CSS changes needed, renderHero() below already
 // handles both types.
+// Both brands work identically: video is tried first, falling back to the
+// image if the video file doesn't exist, falling back to hiding the whole
+// section if NEITHER exists. Set video (or image) to null/omit it entirely
+// for a brand that doesn't have one yet — the fallback chain below handles
+// every combination (video-only, image-only, both, or neither) the same way.
 const HERO_MEDIA = {
-  anzo: { type: "video", src: "media/anzo-hero.mp4", poster: "media/anzo-hero.jpg" },
-  dlsm: { type: "image", src: "media/dlsm-hero.jpg" },
+  anzo: { video: "media/anzo-hero.mp4", image: "media/anzo-hero.jpg" },
+  dlsm: { video: "media/dlsm-hero.mp4", image: "media/dlsm-hero.jpg" },
 };
 
-// Fails silently — if the configured file doesn't exist yet (see
-// media/README.md), the banner just collapses to nothing rather than
-// showing a broken-image/broken-video icon.
+// Tries video, falls back to image on error, falls back to hiding the
+// section entirely if the image ALSO errors (or was never configured) —
+// so every combination in HERO_MEDIA "just works" without needing to know
+// in advance which files actually exist.
 function renderHero(brand) {
   const container = document.getElementById("hero-media");
+  const section = container.closest("section");
   const media = HERO_MEDIA[brand];
-  if (!media) {
-    container.parentElement.style.display = "none";
-    return;
-  }
-  container.parentElement.style.display = "";
+
   // Browsers cache video/image files aggressively by URL — without this,
   // replacing anzo-hero.mp4 with a new video (same filename) could leave
   // visitors seeing the OLD cached one for a long time. This query param
@@ -1611,13 +1647,30 @@ function renderHero(brand) {
   // benefit from normal caching instead of re-downloading a multi-MB
   // video every single time.
   const cacheBust = new Date().toISOString().slice(0, 10);
-  if (media.type === "video") {
+
+  function showImageOrHide() {
+    if (media && media.image) {
+      container.innerHTML = `<img src="${media.image}?v=${cacheBust}" alt="${brand.toUpperCase()} banner">`;
+      container.querySelector("img").addEventListener("error", () => { section.style.display = "none"; });
+    } else {
+      section.style.display = "none";
+    }
+  }
+
+  if (!media || (!media.video && !media.image)) {
+    section.style.display = "none";
+    return;
+  }
+  section.style.display = "";
+
+  if (media.video) {
     container.innerHTML = `
-      <video autoplay muted loop playsinline ${media.poster ? `poster="${media.poster}?v=${cacheBust}"` : ""} onerror="this.closest('section').style.display='none'">
-        <source src="${media.src}?v=${cacheBust}" type="video/mp4">
+      <video autoplay muted loop playsinline>
+        <source src="${media.video}?v=${cacheBust}" type="video/mp4">
       </video>`;
+    container.querySelector("video").addEventListener("error", showImageOrHide);
   } else {
-    container.innerHTML = `<img src="${media.src}?v=${cacheBust}" alt="${brand.toUpperCase()} banner" onerror="this.closest('section').style.display='none'">`;
+    showImageOrHide();
   }
 }
 
@@ -1646,12 +1699,23 @@ async function renderBrand(brand) {
 
 // Clicking Anzo/DLSM in the header switches the active tab's styling and
 // reloads the whole report for that brand.
+// Clicking a brand tab acts like a "home" link, same as landing on this
+// page fresh: resets Compare-by back to Month mode (in case you'd
+// switched to Day or Quarter), and scrolls to the top — not just a brand
+// swap, a full reset back to the default view.
 document.getElementById("brand-tabs").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-brand]");
   if (!btn) return;
   document.querySelectorAll("#brand-tabs button").forEach(b => b.classList.remove("active"));
   btn.classList.add("active");
   currentBrand = btn.dataset.brand;
+
+  document.getElementById("compare-mode").value = "month";
+  document.getElementById("month-controls").style.display = "flex";
+  document.getElementById("day-controls").style.display = "none";
+  document.getElementById("quarter-controls").style.display = "none";
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
   renderBrand(currentBrand);
 });
 
