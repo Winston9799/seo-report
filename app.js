@@ -929,15 +929,13 @@ function renderPagesByCategory(curr, comp) {
 let countryImpressionsChart = null;
 let countryClicksChart = null;
 
-// Draws (or updates) one horizontal bar chart of the top 10 countries by
-// whichever metric is passed in. Chart.js's category axis places index 0 at
-// the BOTTOM for a horizontal bar (indexAxis: 'y'), so the rows are sorted
-// descending then reversed — that puts the #1 country at the TOP of the
-// chart, matching normal "leaderboard" expectations. (If this ever renders
-// upside down after a Chart.js version change, removing .reverse() below is
-// the fix.)
+// Draws (or updates) one vertical bar chart of the top 10 countries by
+// whichever metric is passed in, tallest bar on the left (standard
+// leaderboard order — for a vertical bar chart, Chart.js plots array index 0
+// as the leftmost bar, so a plain descending sort already reads correctly
+// left-to-right with no reversal needed).
 function drawCountryBarChart(existingChart, canvasId, rows, metricKey) {
-  const top10 = [...rows].sort((a, b) => b[metricKey] - a[metricKey]).slice(0, 10).reverse();
+  const top10 = [...rows].sort((a, b) => b[metricKey] - a[metricKey]).slice(0, 10);
   const accent = cssVar("--accent");
   const chartData = {
     labels: top10.map(r => countryName(r.country)),
@@ -953,10 +951,9 @@ function drawCountryBarChart(existingChart, canvasId, rows, metricKey) {
     type: "bar",
     data: chartData,
     options: {
-      indexAxis: "y",
       responsive: true,
       plugins: { legend: { display: false } },
-      scales: { x: { beginAtZero: true } },
+      scales: { y: { beginAtZero: true } },
     },
   });
 }
