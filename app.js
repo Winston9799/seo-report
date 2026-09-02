@@ -17,7 +17,7 @@ const SWING_MIN_BASELINE = 10;
 // For genuine access control, put this behind Cloudflare Access or similar.
 // ---------------------------------------------------------------------------
 
-const REPORT_PASSWORD = "Winston_MKT11"; // <-- change this to your own passphrase before sharing the link
+const REPORT_PASSWORD = "mkt11"; // <-- change this to your own passphrase before sharing the link
 
 // Hides the password screen and reveals the actual report underneath it.
 function unlockReport() {
@@ -924,6 +924,50 @@ function renderPagesByCategory(curr, comp) {
   });
 }
 
+// Two Chart.js instances (kept outside the render function, same pattern as
+// trendChart, so repeated calls update in place instead of rebuilding).
+let countryImpressionsChart = null;
+let countryClicksChart = null;
+
+// Draws (or updates) one horizontal bar chart of the top 10 countries by
+// whichever metric is passed in. Chart.js's category axis places index 0 at
+// the BOTTOM for a horizontal bar (indexAxis: 'y'), so the rows are sorted
+// descending then reversed — that puts the #1 country at the TOP of the
+// chart, matching normal "leaderboard" expectations. (If this ever renders
+// upside down after a Chart.js version change, removing .reverse() below is
+// the fix.)
+function drawCountryBarChart(existingChart, canvasId, rows, metricKey) {
+  const top10 = [...rows].sort((a, b) => b[metricKey] - a[metricKey]).slice(0, 10).reverse();
+  const accent = cssVar("--accent");
+  const chartData = {
+    labels: top10.map(r => countryName(r.country)),
+    datasets: [{ data: top10.map(r => r[metricKey]), backgroundColor: accent }],
+  };
+
+  if (existingChart) {
+    existingChart.data = chartData;
+    existingChart.update();
+    return existingChart;
+  }
+  return new Chart(document.getElementById(canvasId).getContext("2d"), {
+    type: "bar",
+    data: chartData,
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true } },
+    },
+  });
+}
+
+// Renders both country bar charts from the CURRENT period only (a snapshot,
+// like Position Distribution and CTR Opportunities — not a comparison).
+function renderCountryCharts(curr) {
+  countryImpressionsChart = drawCountryBarChart(countryImpressionsChart, "country-impressions-chart", curr.countries, "impressions");
+  countryClicksChart = drawCountryBarChart(countryClicksChart, "country-clicks-chart", curr.countries, "clicks");
+}
+
 const countryColumns = [
   { key: "country_name", label: "Country" },  // sorts/searches by the full display name, not the raw code
   { key: "clicks", label: "Clicks", align: "num", format: fmtNum },
@@ -1037,6 +1081,7 @@ function renderAll() {
   renderMovers(curr, comp);
   renderKeywordSplitTables(curr, comp);
   renderPagesByCategory(curr, comp);
+  renderCountryCharts(curr);
   renderCountries(curr, comp);
   renderDeviceSplit(curr);
 }
