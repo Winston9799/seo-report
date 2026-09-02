@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SEO Report</title>
+<title>SEO Dashboard</title>
 <link rel="stylesheet" href="style.css">
 
 <!-- Real, freely-licensed fallback font (covers Latin + Chinese characters).
@@ -26,7 +26,7 @@
      ================================================================ -->
 <div id="password-gate" class="password-gate">
   <div class="password-box">
-    <div class="password-title">SEO Report</div>
+    <div class="password-title">SEO Dashboard</div>
     <p class="password-copy">Enter the passphrase to view this report.</p>
     <div class="password-field">
       <input type="password" id="password-input" class="password-input" placeholder="Passphrase" autofocus>
@@ -43,27 +43,29 @@
 <div id="report-root" style="display:none;">
 
 <!-- ================================================================
-     HEADER — brand switcher, and the two ways to pick a comparison period
-     (Month vs. Month, or Day vs. Day). app.js shows/hides #month-controls
-     vs. #day-controls based on the #compare-mode dropdown.
+     HEADER — brand switcher, and the three ways to pick a comparison
+     period (Month vs. Month, Day vs. Day, or Quarter vs. Quarter). app.js
+     shows/hides #month-controls / #day-controls / #quarter-controls based
+     on the #compare-mode dropdown.
      ================================================================ -->
 <header>
-  <div class="brand-title" id="brand-title">SEO Report</div>
+  <div class="brand-title" id="brand-title">SEO Dashboard</div>
   <div class="header-controls">
 
     <!-- Anzo / DLSM toggle — clicking a button re-colors the whole page
          (via --accent) and reloads that brand's data/<brand>.json -->
     <div class="brand-tabs" id="brand-tabs">
-      <button data-brand="anzo" class="active">Anzo</button>
+      <button data-brand="anzo" class="active">ANZO</button>
       <button data-brand="dlsm">DLSM</button>
     </div>
 
-    <!-- Month vs. Day toggle -->
+    <!-- Month / Day / Quarter toggle -->
     <div class="month-picker">
       <label for="compare-mode">Compare by</label>
       <select id="compare-mode" class="month-picker-inline">
         <option value="month">Month</option>
         <option value="day">Day</option>
+        <option value="quarter">Quarter</option>
       </select>
     </div>
 
@@ -84,9 +86,48 @@
       <label for="day-compare">vs.</label>
       <select id="day-compare"><option>Loading…</option></select>
     </div>
+
+    <!-- Shown when Compare-by = Quarter. Built by merging whichever
+         archived months fall in each quarter (Q1=Jan-Mar ... Q4=Oct-Dec) —
+         see buildQuarterSnapshot() in app.js. A quarter still in progress
+         (or missing a backfilled month) just merges whatever's available,
+         labeled the same either way. Populated by populateQuarterPickers(). -->
+    <div class="month-picker" id="quarter-controls" style="display:none;">
+      <label for="quarter-current">Quarter</label>
+      <select id="quarter-current"><option>Loading…</option></select>
+      <label for="quarter-compare">vs.</label>
+      <select id="quarter-compare"><option>Loading…</option></select>
+    </div>
   </div>
   <div class="meta-line" id="meta-line">Loading&hellip;</div>
 </header>
+
+<div class="page-layout">
+
+<!-- ================================================================
+     LEFT NAV — jump links to each section. Sticky while scrolling
+     (desktop only — hidden below 1050px, same as most dashboards, since
+     there isn't enough horizontal room to keep it alongside the
+     already-wide tables at that point). #nav-link-funnel is hidden/shown
+     in lockstep with the funnel section itself by renderFunnel() in
+     app.js, since that section only exists for brands with funnel_stages
+     configured (Anzo, not DLSM).
+     ================================================================ -->
+<nav class="side-nav" id="side-nav">
+  <a href="#section-trend">Trend</a>
+  <a href="#section-summary">Executive Summary</a>
+  <a href="#section-page-titles">Page Title &amp; Screen</a>
+  <a href="#section-key-events">Key Events</a>
+  <a href="#funnel-wrapper" id="nav-link-funnel">Conversion Funnel</a>
+  <a href="#section-visibility">Visibility Distribution</a>
+  <a href="#section-ctr">CTR Opportunities</a>
+  <a href="#section-movers">Top Keyword Movers</a>
+  <a href="#section-branded-split">Branded vs. Non-branded</a>
+  <a href="#section-branded-keywords">Branded Keywords</a>
+  <a href="#pages-by-category">Pages by Category</a>
+  <a href="#section-countries">Top Countries</a>
+  <a href="#section-devices">Device &amp; Audience</a>
+</nav>
 
 <div class="container">
 
@@ -96,7 +137,7 @@
        app.js for why it doesn't try to show a single day's "trend").
        The dropdown swaps which metric the two lines plot.
        ================================================================ -->
-  <section style="margin-top:32px;">
+  <section id="section-trend" style="margin-top:32px;">
     <div class="section-head">
       <h2>Trend</h2>
       <select id="metric-select" class="month-picker-inline">
@@ -116,7 +157,7 @@
        Two rows of KPI tiles: Search Console totals, then GA4 totals.
        Filled in by renderSummary() in app.js.
        ================================================================ -->
-  <section>
+  <section id="section-summary">
     <div class="section-head">
       <h2>Executive summary</h2>
       <span class="section-note" id="period-note"></span>
@@ -130,15 +171,15 @@
        Reuses the same sortable/searchable table component as the rest of
        the report. Filled in by renderPageTitles(), renderKeyEventsByName().
        ================================================================ -->
-  <section>
+  <section id="section-page-titles">
     <div class="section-head">
       <h2>Page title and screen (Organic)</h2>
-      <span class="section-note">Views, new users, active users, and key events by page title</span>
+      <span class="section-note">Views and key events by page title</span>
     </div>
     <div id="page-titles-table"></div>
   </section>
 
-  <section>
+  <section id="section-key-events">
     <div class="section-head">
       <h2>Key events by event name (Organic)</h2>
     </div>
@@ -165,7 +206,7 @@
        What % of tracked keywords rank Top 3 / 4-10 / 11-20 / 21+.
        Filled in by renderPositionDistribution().
        ================================================================ -->
-  <section>
+  <section id="section-visibility">
     <div class="section-head">
       <h2>Visibility distribution</h2>
       <span class="section-note" id="distribution-note"></span>
@@ -178,7 +219,7 @@
        Queries underperforming a typical CTR-by-position benchmark.
        Filled in by renderCtrOpportunities().
        ================================================================ -->
-  <section>
+  <section id="section-ctr">
     <div class="section-head">
       <h2>CTR opportunities</h2>
       <span class="section-note">Queries getting fewer clicks than typical for their position</span>
@@ -191,7 +232,7 @@
        Union of both periods' keywords (includes New/Lost), sortable +
        searchable. Filled in by renderMovers().
        ================================================================ -->
-  <section>
+  <section id="section-movers">
     <div class="section-head">
       <h2>Top keyword movers</h2>
       <span class="section-note">Search or sort — click a column header</span>
@@ -205,7 +246,7 @@
        Placed directly above the Branded/Non-branded keyword tables since
        they're the natural detail view for this split.
        ================================================================ -->
-  <section>
+  <section id="section-branded-split">
     <div class="section-head">
       <h2>Branded vs. non-branded</h2>
       <span class="section-note">Share of total clicks</span>
@@ -217,7 +258,7 @@
        BRANDED / NON-BRANDED KEYWORD TABLES (side by side)
        Filled in by renderKeywordSplitTables().
        ================================================================ -->
-  <section>
+  <section id="section-branded-keywords">
     <div class="two-col">
       <div>
         <div class="section-head"><h2>Branded keywords</h2></div>
@@ -245,7 +286,7 @@
        the full sortable/searchable table below. Filled in by
        renderCountryCharts() and renderCountries().
        ================================================================ -->
-  <section>
+  <section id="section-countries">
     <div class="section-head"><h2>Top countries</h2></div>
     <div class="two-col">
       <div>
@@ -268,26 +309,17 @@
   </section>
 
   <!-- ================================================================
-       DEVICE & AUDIENCE BREAKDOWN — 4 small donuts in one row: Gender,
-       Device Category, and Operating System (all GA4, organic search
-       only), plus Device Split (Search Console clicks by device — the
-       one GSC-sourced chart in this row, not GA4). Filled in by
-       renderGenderChart(), renderDeviceUsersChart(), renderOsChart(),
-       and renderDeviceSplit().
+       DEVICE & AUDIENCE BREAKDOWN — 3 donuts in one row: Device Category
+       and Operating System (GA4, organic search only), plus Device Split
+       (Search Console clicks by device — the one GSC-sourced chart here,
+       not GA4). Each chart has its own custom legend below it (count +
+       percentage per segment) instead of Chart.js's built-in legend — see
+       drawDonutChart() in app.js for why. Filled in by
+       renderDeviceUsersChart(), renderOsChart(), and renderDeviceSplit().
        ================================================================ -->
-  <section>
+  <section id="section-devices">
     <div class="section-head"><h2>Device &amp; audience breakdown</h2></div>
-    <div class="four-col">
-      <div>
-        <div class="donut-card-head">
-          Gender (Organic)
-          <select id="gender-metric-select" class="month-picker-inline mini">
-            <option value="activeUsers">Active</option>
-            <option value="newUsers">New</option>
-          </select>
-        </div>
-        <div class="donut-card"><canvas id="gender-chart" height="140"></canvas></div>
-      </div>
+    <div class="three-col">
       <div>
         <div class="donut-card-head">
           Device (Organic)
@@ -296,20 +328,31 @@
             <option value="newUsers">New</option>
           </select>
         </div>
-        <div class="donut-card"><canvas id="device-users-chart" height="140"></canvas></div>
+        <div class="donut-card">
+          <canvas id="device-users-chart" height="200"></canvas>
+          <div class="donut-legend" id="device-users-legend"></div>
+        </div>
       </div>
       <div>
         <div class="donut-card-head">OS (Organic)</div>
-        <div class="donut-card"><canvas id="os-chart" height="140"></canvas></div>
+        <div class="donut-card">
+          <canvas id="os-chart" height="200"></canvas>
+          <div class="donut-legend" id="os-legend"></div>
+        </div>
       </div>
       <div>
         <div class="donut-card-head">Device split (GSC)</div>
-        <div class="donut-card"><canvas id="device-split-chart" height="140"></canvas></div>
+        <div class="donut-card">
+          <canvas id="device-split-chart" height="200"></canvas>
+          <div class="donut-legend" id="device-split-legend"></div>
+        </div>
       </div>
     </div>
   </section>
 
-</div>
+</div><!-- /.container -->
+
+</div><!-- /.page-layout -->
 
 </div><!-- /#report-root -->
 
