@@ -1,4 +1,4 @@
-# Anzo / DLSM SEO Report
+# Anzo / DLSM SEO Dashboard
 
 An auto-updating GA4 + Search Console report, hosted for free on GitHub Pages.
 Toggle between Anzo and DLSM (each with its own brand color), and compare
@@ -46,3 +46,13 @@ carries the rest forward unchanged. Full per-day keyword/page/country/device det
 (needed for the Day-vs-Day comparison mode) is only kept for the most recent
 `DAILY_DETAIL_MONTHS` months, to keep file sizes reasonable — older months still have
 full monthly totals, just not a day-by-day breakdown.
+
+## Backfilling older months after adding a new field
+Because of the above, a month that was archived before some field existed (e.g. an
+older month captured before the GA4-organic rework) just won't have that field until
+it naturally re-enters the `REFRESH_MONTHS` window months from now. To backfill
+everything immediately instead of waiting: go to the **Actions** tab → "Daily SEO
+report update" → **Run workflow** → tick the **full_refresh** checkbox → Run. This
+forces every archived month to be re-fetched in one go (noticeably slower than a
+normal run — that's expected). The regular scheduled run the next day goes straight
+back to the fast incremental behavior automatically.
