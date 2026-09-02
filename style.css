@@ -218,7 +218,7 @@
 
 * { box-sizing: border-box; }
 
-html, body { overflow-x: hidden; }  /* safety net: nothing should ever be able to widen the whole page — see .table-scroll below for the actual fix */
+html, body { overflow-x: clip; }  /* safety net: nothing should ever be able to widen the whole page — see .table-scroll below for the actual fix. Uses "clip" specifically, not "hidden" — hidden triggers a CSS quirk where the OTHER axis silently becomes "auto" too, which was interfering with the side-nav's position: sticky further down this file. */
 html { scroll-behavior: smooth; }   /* makes the side-nav's jump links glide instead of snapping instantly */
 
 
@@ -238,7 +238,7 @@ body {
 .page-layout {
   max-width: 1560px;
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 40px;   /* was 24px — more breathing room so content doesn't sit tight against the screen edge */
   display: flex;
   align-items: flex-start;
   gap: 32px;
