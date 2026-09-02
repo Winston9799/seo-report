@@ -17,7 +17,7 @@ const SWING_MIN_BASELINE = 10;
 // For genuine access control, put this behind Cloudflare Access or similar.
 // ---------------------------------------------------------------------------
 
-const REPORT_PASSWORD = "mkt11"; // <-- change this to your own passphrase before sharing the link
+const REPORT_PASSWORD = "changeme"; // <-- change this to your own passphrase before sharing the link
 
 // Hides the password screen and reveals the actual report underneath it.
 function unlockReport() {
@@ -367,7 +367,7 @@ function buildDaySnapshot(dateStr) {
   if (!month || !month.daily_detail || !month.daily_detail[dateStr]) return null;
   const detail = month.daily_detail[dateStr];
   const dayTotals = (month.daily || []).find(d => d.date === dateStr) ||
-    { clicks: 0, impressions: 0, ctr: 0, position: null, sessions: 0, activeUsers: 0, conversions: 0 };
+    { clicks: 0, impressions: 0, ctr: 0, position: null, sessions: 0, engagedSessions: 0, bounceRate: 0, newUsers: 0, activeUsers: 0, keyEvents: 0 };
 
   const brandedSum = summarizeDayRows(detail.branded_keywords);
   const nonBrandedSum = summarizeDayRows(detail.non_branded_keywords);
@@ -386,7 +386,14 @@ function buildDaySnapshot(dateStr) {
     pages: detail.pages,
     countries: detail.countries,
     devices: detail.devices,
-    ga4: { sessions: dayTotals.sessions, activeUsers: dayTotals.activeUsers, conversions: dayTotals.conversions },
+    ga4: {
+      sessions: dayTotals.sessions,
+      engagedSessions: dayTotals.engagedSessions,
+      bounceRate: dayTotals.bounceRate,
+      newUsers: dayTotals.newUsers,
+      activeUsers: dayTotals.activeUsers,
+      keyEvents: dayTotals.keyEvents,
+    },
   };
 }
 
@@ -650,7 +657,8 @@ function kpiCard(label, value, deltaPct) {
 }
 
 // Fills in the two rows of KPI tiles (Search Console totals, then GA4
-// totals) and the "Aug 2026 vs. Jul 2026" note beneath the section heading.
+// organic-search-only totals) and the "Aug 2026 vs. Jul 2026" note beneath
+// the section heading.
 function renderSummary(curr, comp) {
   const s = curr.summary, sp = comp.summary;
   document.getElementById("kpi-row").innerHTML = [
@@ -663,11 +671,19 @@ function renderSummary(curr, comp) {
     kpiCard("Average position", s.position, sp.position ? -pctChange(s.position, sp.position) : null),
   ].join("");
 
+  // All 6 of these come from fetch_data.py's ga4_totals(), which is
+  // filtered to sessionDefaultChannelGroup == "Organic Search" — every
+  // number here is organic-search traffic only, not the site's total traffic.
   const g = curr.ga4, gp = comp.ga4;
   document.getElementById("kpi-row-ga4").innerHTML = [
-    kpiCard("Sessions (GA4)", fmtNum(g.sessions), pctChange(g.sessions, gp.sessions)),
-    kpiCard("Active users (GA4)", fmtNum(g.activeUsers), pctChange(g.activeUsers, gp.activeUsers)),
-    kpiCard("Conversions (GA4)", fmtNum(g.conversions), pctChange(g.conversions, gp.conversions)),
+    kpiCard("Sessions (organic)", fmtNum(g.sessions), pctChange(g.sessions, gp.sessions)),
+    kpiCard("Engaged sessions (organic)", fmtNum(g.engagedSessions), pctChange(g.engagedSessions, gp.engagedSessions)),
+    // Bounce rate is also inverted like Position — a LOWER bounce rate is
+    // an improvement, so the sign is flipped for a correctly colored arrow.
+    kpiCard("Bounce rate (organic)", fmtPct(g.bounceRate), gp.bounceRate ? -pctChange(g.bounceRate, gp.bounceRate) : null),
+    kpiCard("New users (organic)", fmtNum(g.newUsers), pctChange(g.newUsers, gp.newUsers)),
+    kpiCard("Active users (organic)", fmtNum(g.activeUsers), pctChange(g.activeUsers, gp.activeUsers)),
+    kpiCard("Key events (organic)", fmtNum(g.keyEvents), pctChange(g.keyEvents, gp.keyEvents)),
   ].join("");
 
   document.getElementById("period-note").textContent = `${curr.label} vs. ${comp.label}`;
@@ -793,6 +809,103 @@ function renderCtrOpportunities(curr) {
     searchKey: "query",
     defaultSortKey: "est_extra_clicks",
     defaultSortDir: "desc",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// GA4 audience/behavior breakdowns (organic search only, current period)
+// ---------------------------------------------------------------------------
+
+// Kept outside the render functions so repeated calls update in place.
+let genderChart = null;
+let deviceUsersChart = null;
+let osChart = null;
+
+// "male" -> "Male", "mobile" -> "Mobile" — GA4 returns these category
+// values lowercase; OS names (e.g. "iOS", "Android") come back already
+// nicely capitalized and are used as-is.
+function capitalize(s) {
+  return String(s).charAt(0).toUpperCase() + String(s).slice(1).toLowerCase();
+}
+
+// Draws (or updates) one donut chart from a GA4 breakdown array (each row
+// shaped like {label, activeUsers, newUsers, ...} — see ga4_breakdown() in
+// fetch_data.py). Cycles through the design system's own palette rather
+// than inventing new colors, so charts stay visually consistent with the
+// rest of the report regardless of which brand/accent is active.
+function drawDonutChart(existingChart, canvasId, rows, metricKey, labelFormatter) {
+  const palette = [cssVar("--accent"), cssVar("--secondary"), cssVar("--positive"), cssVar("--negative"), cssVar("--muted"), cssVar("--border")];
+  const chartData = {
+    labels: rows.map(r => (labelFormatter ? labelFormatter(r.label) : r.label)),
+    datasets: [{
+      data: rows.map(r => r[metricKey]),
+      backgroundColor: rows.map((_, i) => palette[i % palette.length]),
+      borderWidth: 0,
+    }],
+  };
+
+  if (existingChart) {
+    existingChart.data = chartData;
+    existingChart.update();
+    return existingChart;
+  }
+  return new Chart(document.getElementById(canvasId).getContext("2d"), {
+    type: "doughnut",
+    data: chartData,
+    options: {
+      responsive: true,
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 12 } } },
+    },
+  });
+}
+
+// Gender and Device Category both support a New Users / Active Users
+// toggle (the <select> next to each chart's heading); Operating System
+// only ever shows Active Users, matching what was asked for.
+function renderGenderChart(curr) {
+  const metric = document.getElementById("gender-metric-select").value;
+  genderChart = drawDonutChart(genderChart, "gender-chart", curr.gender || [], metric, capitalize);
+}
+
+function renderDeviceUsersChart(curr) {
+  const metric = document.getElementById("device-users-metric-select").value;
+  deviceUsersChart = drawDonutChart(deviceUsersChart, "device-users-chart", curr.device_users || [], metric, capitalize);
+}
+
+function renderOsChart(curr) {
+  osChart = drawDonutChart(osChart, "os-chart", curr.operating_systems || [], "activeUsers");
+}
+
+// Interests, Page Title/Screen, and Key Events by Name all reuse the same
+// sortable/searchable table component as the rest of the report (see
+// createInteractiveTable above) — current period only, same as the donuts.
+const interestColumns = [
+  { key: "label", label: "Interest", wrap: true, format: escapeHtml },
+  { key: "activeUsers", label: "Active users", align: "num", format: fmtNum },
+];
+function renderInterests(curr) {
+  createInteractiveTable(document.getElementById("interests-table"), interestColumns, curr.interests || [], {
+    searchKey: "label", defaultSortKey: "activeUsers", defaultSortDir: "desc",
+  });
+}
+
+const pageTitleColumns = [
+  { key: "label", label: "Page title", wrap: true, format: escapeHtml },
+  { key: "screenPageViews", label: "Views", align: "num", format: fmtNum },
+];
+function renderPageTitles(curr) {
+  createInteractiveTable(document.getElementById("page-titles-table"), pageTitleColumns, curr.page_titles || [], {
+    searchKey: "label", defaultSortKey: "screenPageViews", defaultSortDir: "desc",
+  });
+}
+
+const keyEventColumns = [
+  { key: "label", label: "Event name", wrap: true, format: escapeHtml },
+  { key: "keyEvents", label: "Key events", align: "num", format: fmtNum },
+];
+function renderKeyEventsByName(curr) {
+  createInteractiveTable(document.getElementById("key-events-table"), keyEventColumns, curr.key_events_by_name || [], {
+    searchKey: "label", defaultSortKey: "keyEvents", defaultSortDir: "desc",
   });
 }
 
@@ -1072,6 +1185,12 @@ function renderAll() {
 
   renderTrendChart(currTrendSeries, currTrendLabel, compTrendSeries, compTrendLabel);
   renderSummary(curr, comp);
+  renderGenderChart(curr);
+  renderDeviceUsersChart(curr);
+  renderOsChart(curr);
+  renderInterests(curr);
+  renderPageTitles(curr);
+  renderKeyEventsByName(curr);
   renderSplit(curr);
   renderPositionDistribution(curr);
   renderCtrOpportunities(curr);
@@ -1166,6 +1285,8 @@ document.getElementById("month-compare").addEventListener("change", renderAll);
 document.getElementById("day-current").addEventListener("change", renderAll);
 document.getElementById("day-compare").addEventListener("change", renderAll);
 document.getElementById("metric-select").addEventListener("change", renderAll);
+document.getElementById("gender-metric-select").addEventListener("change", renderAll);
+document.getElementById("device-users-metric-select").addEventListener("change", renderAll);
 
 // Kicks everything off on page load.
 renderBrand(currentBrand);
