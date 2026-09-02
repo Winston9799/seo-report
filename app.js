@@ -1486,6 +1486,20 @@ function updateActiveNavLink() {
 
 window.addEventListener("scroll", updateActiveNavLink, { passive: true });
 
+// Back-to-top button: appears once you've scrolled down a bit, hidden
+// near the top of the page where it'd be pointless.
+function updateBackToTopButton() {
+  const btn = document.getElementById("back-to-top");
+  if (!btn) return;
+  btn.classList.toggle("visible", window.scrollY > 500);
+}
+
+window.addEventListener("scroll", updateBackToTopButton, { passive: true });
+document.getElementById("back-to-top").addEventListener("click", () => {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+updateBackToTopButton(); // in case the page loads already scrolled (e.g. a reload mid-scroll)
+
 function renderAll() {
   const mode = document.getElementById("compare-mode").value;
   let curr, comp, currTrendSeries, currTrendLabel, compTrendSeries, compTrendLabel;
