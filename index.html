@@ -126,68 +126,14 @@
   </section>
 
   <!-- ================================================================
-       AUDIENCE (ORGANIC) — Gender and Device Category, each as a donut
-       with a New Users / Active Users toggle. Filled in by
-       renderGenderChart() and renderDeviceUsersChart().
-       ================================================================ -->
-  <section>
-    <div class="two-col">
-      <div>
-        <div class="section-head">
-          <h2>Gender (Organic)</h2>
-          <select id="gender-metric-select" class="month-picker-inline">
-            <option value="activeUsers">Active users</option>
-            <option value="newUsers">New users</option>
-          </select>
-        </div>
-        <div style="background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px;">
-          <canvas id="gender-chart" height="240"></canvas>
-        </div>
-      </div>
-      <div>
-        <div class="section-head">
-          <h2>Device category (Organic)</h2>
-          <select id="device-users-metric-select" class="month-picker-inline">
-            <option value="activeUsers">Active users</option>
-            <option value="newUsers">New users</option>
-          </select>
-        </div>
-        <div style="background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px;">
-          <canvas id="device-users-chart" height="240"></canvas>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ================================================================
-       OPERATING SYSTEM (ORGANIC) — single donut, active users only.
-       Filled in by renderOsChart().
-       ================================================================ -->
-  <section>
-    <div class="section-head"><h2>Operating system (Organic)</h2></div>
-    <div style="background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; max-width:480px;">
-      <canvas id="os-chart" height="240"></canvas>
-    </div>
-  </section>
-
-  <!-- ================================================================
-       INTERESTS / PAGE TITLES / KEY EVENTS (ORGANIC)
+       PAGE TITLES / KEY EVENTS (ORGANIC)
        Reuses the same sortable/searchable table component as the rest of
-       the report. Filled in by renderInterests(), renderPageTitles(),
-       renderKeyEventsByName().
+       the report. Filled in by renderPageTitles(), renderKeyEventsByName().
        ================================================================ -->
-  <section>
-    <div class="section-head">
-      <h2>Interests (Organic)</h2>
-      <span class="section-note">Active users by interest category</span>
-    </div>
-    <div id="interests-table"></div>
-  </section>
-
   <section>
     <div class="section-head">
       <h2>Page title and screen (Organic)</h2>
-      <span class="section-note">Views by page title</span>
+      <span class="section-note">Views, new users, active users, and key events by page title</span>
     </div>
     <div id="page-titles-table"></div>
   </section>
@@ -200,15 +146,18 @@
   </section>
 
   <!-- ================================================================
-       BRANDED VS. NON-BRANDED SPLIT
-       Current period only (not a comparison) — filled in by renderSplit().
+       CONVERSION FUNNEL (ORGANIC) — Anzo only (see funnel_stages in
+       fetch_data.py's BRANDS config). Entirely hand-built with HTML/CSS,
+       not Chart.js — Chart.js has no native funnel chart type. Hidden
+       automatically for any brand with no funnel_stages configured (e.g.
+       DLSM), rather than showing an empty chart.
        ================================================================ -->
-  <section>
+  <section id="funnel-wrapper">
     <div class="section-head">
-      <h2>Branded vs. non-branded</h2>
-      <span class="section-note">Share of total clicks</span>
+      <h2>Conversion funnel (Organic)</h2>
+      <span class="section-note">Event counts, % of top-of-funnel, and drop-off between stages</span>
     </div>
-    <div id="split-section"></div>
+    <div id="funnel-container"></div>
   </section>
 
   <!-- ================================================================
@@ -248,6 +197,20 @@
       <span class="section-note">Search or sort — click a column header</span>
     </div>
     <div id="movers-table"></div>
+  </section>
+
+  <!-- ================================================================
+       BRANDED VS. NON-BRANDED SPLIT
+       Current period only (not a comparison) — filled in by renderSplit().
+       Placed directly above the Branded/Non-branded keyword tables since
+       they're the natural detail view for this split.
+       ================================================================ -->
+  <section>
+    <div class="section-head">
+      <h2>Branded vs. non-branded</h2>
+      <span class="section-note">Share of total clicks</span>
+    </div>
+    <div id="split-section"></div>
   </section>
 
   <!-- ================================================================
@@ -305,12 +268,45 @@
   </section>
 
   <!-- ================================================================
-       DEVICE SPLIT
-       Filled in by renderDeviceSplit().
+       DEVICE & AUDIENCE BREAKDOWN — 4 small donuts in one row: Gender,
+       Device Category, and Operating System (all GA4, organic search
+       only), plus Device Split (Search Console clicks by device — the
+       one GSC-sourced chart in this row, not GA4). Filled in by
+       renderGenderChart(), renderDeviceUsersChart(), renderOsChart(),
+       and renderDeviceSplit().
        ================================================================ -->
   <section>
-    <div class="section-head"><h2>Device split</h2></div>
-    <div id="device-split"></div>
+    <div class="section-head"><h2>Device &amp; audience breakdown</h2></div>
+    <div class="four-col">
+      <div>
+        <div class="donut-card-head">
+          Gender (Organic)
+          <select id="gender-metric-select" class="month-picker-inline mini">
+            <option value="activeUsers">Active</option>
+            <option value="newUsers">New</option>
+          </select>
+        </div>
+        <div class="donut-card"><canvas id="gender-chart" height="140"></canvas></div>
+      </div>
+      <div>
+        <div class="donut-card-head">
+          Device (Organic)
+          <select id="device-users-metric-select" class="month-picker-inline mini">
+            <option value="activeUsers">Active</option>
+            <option value="newUsers">New</option>
+          </select>
+        </div>
+        <div class="donut-card"><canvas id="device-users-chart" height="140"></canvas></div>
+      </div>
+      <div>
+        <div class="donut-card-head">OS (Organic)</div>
+        <div class="donut-card"><canvas id="os-chart" height="140"></canvas></div>
+      </div>
+      <div>
+        <div class="donut-card-head">Device split (GSC)</div>
+        <div class="donut-card"><canvas id="device-split-chart" height="140"></canvas></div>
+      </div>
+    </div>
   </section>
 
 </div>
