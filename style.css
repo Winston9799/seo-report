@@ -271,7 +271,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 16px 0;
+  padding: 40px 0 16px;
   max-height: calc(100vh - 120px);
   overflow-y: auto;
 }
