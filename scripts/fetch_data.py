@@ -21,6 +21,7 @@ account key passed via the GOOGLE_SERVICE_ACCOUNT_JSON environment variable
 
 import os
 import json
+import re
 import calendar
 from datetime import date, timedelta
 
@@ -165,6 +166,16 @@ def gsc_query(service, site_url, dimensions, start, end, row_limit=25000, max_pa
             break  # got fewer rows than the max — that was the last page
         start_row += row_limit
     return all_rows
+
+
+def normalize_for_brand_match(s):
+    """Strips spaces/hyphens/underscores and lowercases, so brand matching
+    catches spacing variants of the same term — e.g. "anzo capital",
+    "anzocapital", and "anzo-capital" all normalize to "anzocapital" and
+    match each other. Without this, a literal substring check on
+    brand_keyword would miss any query that just happens to be typed (or
+    URL-slugged) without the space."""
+    return re.sub(r"[\s\-_]+", "", s.lower())
 
 
 def weighted_position(rows):
@@ -315,8 +326,10 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
     summary = summarize(qc)
 
     # --- Branded vs. non-branded split ---
-    brand_kw = brand["brand_keyword"].lower()
-    is_branded = lambda q: brand_kw in q.lower()
+    # normalize_for_brand_match strips spaces/hyphens so "anzo capital",
+    # "anzocapital", and "anzo-capital" are all treated as the same term.
+    brand_kw = normalize_for_brand_match(brand["brand_keyword"])
+    is_branded = lambda q: brand_kw in normalize_for_brand_match(q)
 
     branded_rows = [r for r in qc if is_branded(r["query"])]
     nonbranded_rows = [r for r in qc if not is_branded(r["query"])]
