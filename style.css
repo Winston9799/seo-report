@@ -321,12 +321,10 @@ header {
      brand switch) with transparency — this is what makes the header
      dynamically red for Anzo / blue for DLSM, at whatever translucency %
      is set here, without needing JS to pre-compute an rgba() string.
-     45%/50% would look great over the dark hero video but risks getting
-     too pale for white text once scrolled onto a bright white section of
-     the page — 60% is the more see-through-but-still-legible middle
-     ground. If it still feels too transparent, raise this number; if you
-     want more see-through and don't mind slightly less contrast, lower it. */
-  background: color-mix(in srgb, var(--accent) 60%, transparent);
+     Chosen after comparing options directly: 60% washed out to a pale,
+     low-contrast pink over white page sections. 85% keeps enough
+     see-through/blur character while staying legible everywhere. */
+  background: color-mix(in srgb, var(--accent) 85%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   color: var(--white);
