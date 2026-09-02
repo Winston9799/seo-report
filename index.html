@@ -102,7 +102,7 @@
       <select id="metric-select" class="month-picker-inline">
         <option value="clicks">Clicks</option>
         <option value="impressions">Impressions</option>
-        <option value="sessions">Sessions (GA4)</option>
+        <option value="sessions">Sessions (Organic)</option>
         <option value="position">Position</option>
       </select>
     </div>
@@ -123,6 +123,80 @@
     </div>
     <div class="kpi-row" id="kpi-row"></div>
     <div class="kpi-row" id="kpi-row-ga4" style="margin-top:16px;"></div>
+  </section>
+
+  <!-- ================================================================
+       AUDIENCE (ORGANIC) — Gender and Device Category, each as a donut
+       with a New Users / Active Users toggle. Filled in by
+       renderGenderChart() and renderDeviceUsersChart().
+       ================================================================ -->
+  <section>
+    <div class="two-col">
+      <div>
+        <div class="section-head">
+          <h2>Gender (Organic)</h2>
+          <select id="gender-metric-select" class="month-picker-inline">
+            <option value="activeUsers">Active users</option>
+            <option value="newUsers">New users</option>
+          </select>
+        </div>
+        <div style="background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px;">
+          <canvas id="gender-chart" height="240"></canvas>
+        </div>
+      </div>
+      <div>
+        <div class="section-head">
+          <h2>Device category (Organic)</h2>
+          <select id="device-users-metric-select" class="month-picker-inline">
+            <option value="activeUsers">Active users</option>
+            <option value="newUsers">New users</option>
+          </select>
+        </div>
+        <div style="background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px;">
+          <canvas id="device-users-chart" height="240"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       OPERATING SYSTEM (ORGANIC) — single donut, active users only.
+       Filled in by renderOsChart().
+       ================================================================ -->
+  <section>
+    <div class="section-head"><h2>Operating system (Organic)</h2></div>
+    <div style="background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; max-width:480px;">
+      <canvas id="os-chart" height="240"></canvas>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       INTERESTS / PAGE TITLES / KEY EVENTS (ORGANIC)
+       Reuses the same sortable/searchable table component as the rest of
+       the report. Filled in by renderInterests(), renderPageTitles(),
+       renderKeyEventsByName().
+       ================================================================ -->
+  <section>
+    <div class="section-head">
+      <h2>Interests (Organic)</h2>
+      <span class="section-note">Active users by interest category</span>
+    </div>
+    <div id="interests-table"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Page title and screen (Organic)</h2>
+      <span class="section-note">Views by page title</span>
+    </div>
+    <div id="page-titles-table"></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Key events by event name (Organic)</h2>
+    </div>
+    <div id="key-events-table"></div>
   </section>
 
   <!-- ================================================================
