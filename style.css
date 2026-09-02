@@ -309,7 +309,17 @@ header {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--ink);
+  /* was a solid var(--ink) fill — this is translucent instead, so content
+     scrolling underneath (the hero video, tables, etc.) shows through.
+     Fully transparent isn't used here on purpose: every bit of text/UI in
+     this header is styled white/light for contrast against a DARK
+     background, so on a truly transparent header it'd turn illegible the
+     moment you scroll past the video onto the page's white background.
+     The blur is what keeps it feeling "glassy" rather than just a plain
+     dark tint. */
+  background: rgba(0, 10, 30, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: var(--white);
   padding: 16px 24px;
   display: flex;
@@ -960,3 +970,38 @@ tr.row-swing-down:hover td { background: rgba(219, 86, 20, 0.15); }
   border-radius: var(--radius-md);
   font-size: 15px;
 }
+
+/* ============================================================
+   BACK TO TOP
+   Fixed bottom-right, hidden until scrolled down a bit — see
+   updateBackToTopButton() in app.js for the show/hide threshold.
+   ============================================================ */
+
+.back-to-top {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  border: 2px solid var(--accent);
+  background: transparent;   /* was a solid var(--accent) fill — now just the outline + arrow carry the brand color */
+  color: var(--accent);      /* the arrow character itself switches color with the brand, same as the border */
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.2s, transform 0.2s, background 0.15s, color 0.15s;
+  z-index: 20;
+}
+
+.back-to-top.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.back-to-top:hover { background: var(--accent); color: var(--white); }
