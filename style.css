@@ -271,7 +271,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 40px 0 16px;
+  padding: 40px 0 16px;   /* was 16px 0 — more breathing room specifically above the first link, between it and the header */
   max-height: calc(100vh - 120px);
   overflow-y: auto;
 }
@@ -875,6 +875,14 @@ tr.row-swing-down:hover td { background: rgba(219, 86, 20, 0.15); }
   height: 9px;
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+.chart-unavailable {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  padding: 40px 16px;
 }
 
 /* ---------- Conversion funnel ---------- */

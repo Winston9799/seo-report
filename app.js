@@ -17,7 +17,7 @@ const SWING_MIN_BASELINE = 10;
 // For genuine access control, put this behind Cloudflare Access or similar.
 // ---------------------------------------------------------------------------
 
-const REPORT_PASSWORD = "mkt11"; // <-- change this to your own passphrase before sharing the link
+const REPORT_PASSWORD = "mkt11"; // <-- change this to your own password before sharing the link
 
 // Hides the password screen and reveals the actual report underneath it.
 function unlockReport() {
@@ -26,7 +26,7 @@ function unlockReport() {
 }
 
 // Runs when the Unlock button is clicked (or Enter is pressed) — checks the
-// typed passphrase, remembers success for this browser tab via
+// typed password, remembers success for this browser tab via
 // sessionStorage so a reload within the same session skips the prompt.
 function attemptUnlock() {
   const input = document.getElementById("password-input");
@@ -64,7 +64,7 @@ document.getElementById("password-toggle").addEventListener("click", () => {
   const nowVisible = input.type === "password";
   input.type = nowVisible ? "text" : "password";
   icon.innerHTML = nowVisible ? EYE_OFF_ICON : EYE_ICON;
-  btn.setAttribute("aria-label", nowVisible ? "Hide passphrase" : "Show passphrase");
+  btn.setAttribute("aria-label", nowVisible ? "Hide password" : "Show password");
   input.focus();
 });
 
@@ -1115,13 +1115,43 @@ function drawDonutChart(existingChart, canvasId, legendId, rows, metricKey, labe
 // Device Category supports a New Users / Active Users toggle (the <select>
 // next to its heading); Operating System only ever shows Active Users,
 // matching what was asked for.
+// device_users/operating_systems/page_titles/key_events_by_name are only
+// ever computed at the MONTHLY level in fetch_data.py — Day mode's
+// snapshot (buildDaySnapshot in this file) never includes them at all, so
+// they come through as `undefined` (not just an empty array) when a day
+// is selected. That distinction is exactly what "unavailable in Day mode"
+// vs. "genuinely zero rows" hinges on below.
 function renderDeviceUsersChart(curr) {
+  const canvas = document.getElementById("device-users-chart");
+  const legend = document.getElementById("device-users-legend");
+  const placeholder = document.getElementById("device-users-unavailable");
+  if (curr.device_users === undefined) {
+    canvas.style.display = "none";
+    legend.style.display = "none";
+    placeholder.style.display = "";
+    return;
+  }
+  canvas.style.display = "";
+  legend.style.display = "";
+  placeholder.style.display = "none";
   const metric = document.getElementById("device-users-metric-select").value;
-  deviceUsersChart = drawDonutChart(deviceUsersChart, "device-users-chart", "device-users-legend", curr.device_users || [], metric, capitalize);
+  deviceUsersChart = drawDonutChart(deviceUsersChart, "device-users-chart", "device-users-legend", curr.device_users, metric, capitalize);
 }
 
 function renderOsChart(curr) {
-  osChart = drawDonutChart(osChart, "os-chart", "os-legend", curr.operating_systems || [], "activeUsers");
+  const canvas = document.getElementById("os-chart");
+  const legend = document.getElementById("os-legend");
+  const placeholder = document.getElementById("os-unavailable");
+  if (curr.operating_systems === undefined) {
+    canvas.style.display = "none";
+    legend.style.display = "none";
+    placeholder.style.display = "";
+    return;
+  }
+  canvas.style.display = "";
+  legend.style.display = "";
+  placeholder.style.display = "none";
+  osChart = drawDonutChart(osChart, "os-chart", "os-legend", curr.operating_systems, "activeUsers");
 }
 
 // Page Title/Screen and Key Events by Name reuse the same sortable/
@@ -1133,7 +1163,12 @@ const pageTitleColumns = [
   { key: "keyEvents", label: "Key events", align: "num", format: fmtNum },
 ];
 function renderPageTitles(curr) {
-  createInteractiveTable(document.getElementById("page-titles-table"), pageTitleColumns, curr.page_titles || [], {
+  const container = document.getElementById("page-titles-table");
+  if (curr.page_titles === undefined) {
+    container.innerHTML = `<div class="chart-unavailable">This data isn't available in Day mode — GA4 page-title breakdowns are only computed at the monthly level, not daily. Switch to Month or Quarter mode to see this table.</div>`;
+    return;
+  }
+  createInteractiveTable(container, pageTitleColumns, curr.page_titles, {
     searchKey: "label", defaultSortKey: "screenPageViews", defaultSortDir: "desc",
   });
 }
@@ -1143,7 +1178,12 @@ const keyEventColumns = [
   { key: "keyEvents", label: "Key events", align: "num", format: fmtNum },
 ];
 function renderKeyEventsByName(curr) {
-  createInteractiveTable(document.getElementById("key-events-table"), keyEventColumns, curr.key_events_by_name || [], {
+  const container = document.getElementById("key-events-table");
+  if (curr.key_events_by_name === undefined) {
+    container.innerHTML = `<div class="chart-unavailable">This data isn't available in Day mode — GA4 key event breakdowns are only computed at the monthly level, not daily. Switch to Month or Quarter mode to see this table.</div>`;
+    return;
+  }
+  createInteractiveTable(container, keyEventColumns, curr.key_events_by_name, {
     searchKey: "label", defaultSortKey: "keyEvents", defaultSortDir: "desc",
   });
 }
