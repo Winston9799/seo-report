@@ -319,7 +319,14 @@ header {
   gap: 16px;
 }
 
-.brand-title { font-size: 26px; font-weight: 700; letter-spacing: 0.01em; }
+.brand-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;   /* clicking it resets to home — see goHome() in app.js */
+  transition: opacity 0.15s;
+}
+.brand-title:hover { opacity: 0.8; }
 
 .header-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 
