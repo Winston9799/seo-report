@@ -17,7 +17,7 @@ const SWING_MIN_BASELINE = 10;
 // For genuine access control, put this behind Cloudflare Access or similar.
 // ---------------------------------------------------------------------------
 
-const REPORT_PASSWORD = "changeme"; // <-- change this to your own passphrase before sharing the link
+const REPORT_PASSWORD = "mkt11"; // <-- change this to your own password before sharing the link
 
 // Hides the password screen and reveals the actual report underneath it.
 function unlockReport() {
@@ -26,7 +26,7 @@ function unlockReport() {
 }
 
 // Runs when the Unlock button is clicked (or Enter is pressed) — checks the
-// typed passphrase, remembers success for this browser tab via
+// typed password, remembers success for this browser tab via
 // sessionStorage so a reload within the same session skips the prompt.
 function attemptUnlock() {
   const input = document.getElementById("password-input");
@@ -64,7 +64,7 @@ document.getElementById("password-toggle").addEventListener("click", () => {
   const nowVisible = input.type === "password";
   input.type = nowVisible ? "text" : "password";
   icon.innerHTML = nowVisible ? EYE_OFF_ICON : EYE_ICON;
-  btn.setAttribute("aria-label", nowVisible ? "Hide passphrase" : "Show passphrase");
+  btn.setAttribute("aria-label", nowVisible ? "Hide password" : "Show password");
   input.focus();
 });
 
