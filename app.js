@@ -398,6 +398,158 @@ function buildDaySnapshot(dateStr) {
 }
 
 // ---------------------------------------------------------------------------
+// Quarter-vs-quarter support — merges whichever archived months fall in
+// each quarter into one combined snapshot, shaped the same way a month or
+// day snapshot is, so every render function works unchanged here too.
+// ---------------------------------------------------------------------------
+
+// Q1 = Jan-Mar, Q2 = Apr-Jun, Q3 = Jul-Sep, Q4 = Oct-Dec.
+function findQuarter(month) {
+  return Math.ceil(month / 3);
+}
+
+// Scans every loaded month and returns the distinct quarters they fall
+// into, newest first — populates the two Quarter dropdowns. A quarter
+// still in progress (or with a gap from a month that hasn't been
+// backfilled yet) still appears — it just merges whatever months ARE
+// loaded for it, same principle as a partial "current month".
+function listAvailableQuarters() {
+  const seen = new Set();
+  const quarters = [];
+  months.forEach(mo => {
+    const q = findQuarter(mo.month);
+    const key = `${mo.year}-Q${q}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      quarters.push({ year: mo.year, quarter: q, key, label: `Q${q} ${mo.year}` });
+    }
+  });
+  return quarters.sort((a, b) => (b.year - a.year) || (b.quarter - a.quarter));
+}
+
+// Sums a list of {clicks, impressions, ctr, position} objects into one —
+// clicks/impressions add directly, but ctr and position are RATIOS, so
+// they're recomputed from the summed totals rather than added together
+// (same weighted-aggregation principle used throughout fetch_data.py).
+function sumSummaries(list) {
+  const clicks = list.reduce((s, x) => s + (x.clicks || 0), 0);
+  const impressions = list.reduce((s, x) => s + (x.impressions || 0), 0);
+  const ctr = impressions ? clicks / impressions : 0;
+  const posWeight = list.reduce((s, x) => s + (x.position || 0) * (x.impressions || 0), 0);
+  const position = impressions ? Math.round((posWeight / impressions) * 10) / 10 : 0;
+  return { clicks, impressions, ctr, position };
+}
+
+// Merges several months' worth of one row-list (keywords/pages/countries/
+// devices/GA4 breakdowns — anything shaped as an array of objects sharing
+// one identifying field) into a single combined list: matching rows (same
+// query, same page, same country, ...) get their numeric fields summed
+// across months, with ctr/position recomputed from the summed totals
+// rather than summed directly, same as sumSummaries above. Re-sorts by
+// sortKey (defaults to whatever the FIRST row's fields suggest is the
+// primary metric) so the merged list comes out ranked, not just concatenated.
+function mergeRowLists(lists, keyField, sortKey) {
+  const merged = {};
+  lists.forEach(list => {
+    (list || []).forEach(row => {
+      const k = row[keyField];
+      if (!merged[k]) merged[k] = { [keyField]: k, _posWeight: 0, _imprForPos: 0 };
+      const acc = merged[k];
+      Object.keys(row).forEach(field => {
+        if (field === keyField || field === "ctr" || field === "position") return;
+        if (typeof row[field] !== "number") return;
+        acc[field] = (acc[field] || 0) + row[field];
+      });
+      if (typeof row.position === "number" && typeof row.impressions === "number") {
+        acc._posWeight += row.position * row.impressions;
+        acc._imprForPos += row.impressions;
+      }
+    });
+  });
+  let out = Object.values(merged).map(acc => {
+    const row = { ...acc };
+    if (acc._imprForPos > 0) row.position = Math.round((acc._posWeight / acc._imprForPos) * 10) / 10;
+    if (typeof row.clicks === "number" && typeof row.impressions === "number" && row.impressions > 0) {
+      row.ctr = Math.round((row.clicks / row.impressions) * 10000) / 10000;
+    }
+    delete row._posWeight;
+    delete row._imprForPos;
+    return row;
+  });
+  const effectiveSortKey = sortKey || Object.keys(out[0] || {}).find(k => k !== keyField && typeof out[0][k] === "number");
+  if (effectiveSortKey) out.sort((a, b) => (b[effectiveSortKey] || 0) - (a[effectiveSortKey] || 0));
+  return out;
+}
+
+// Sums a quarter's worth of monthly GA4 totals. Sessions, engaged
+// sessions, and key events are genuinely additive (no double-counting
+// risk). New/active users are summed too, but — worth knowing — a user
+// active in more than one month of the quarter gets counted once per
+// month they were active in, not deduplicated into one true quarterly
+// unique count. Getting a true dedup would need a separate live API call
+// for the whole quarter's date range rather than merging monthly
+// snapshots; summing is the honest, cheap approximation used here.
+function sumGa4(list) {
+  const sessions = list.reduce((s, x) => s + (x.sessions || 0), 0);
+  const engagedSessions = list.reduce((s, x) => s + (x.engagedSessions || 0), 0);
+  const newUsers = list.reduce((s, x) => s + (x.newUsers || 0), 0);
+  const activeUsers = list.reduce((s, x) => s + (x.activeUsers || 0), 0);
+  const keyEvents = list.reduce((s, x) => s + (x.keyEvents || 0), 0);
+  const bounceRate = sessions ? Math.round((1 - engagedSessions / sessions) * 10000) / 10000 : 0;
+  return { sessions, engagedSessions, bounceRate, newUsers, activeUsers, keyEvents };
+}
+
+// Sums the funnel's per-stage counts across a quarter's months — assumes
+// every month has the same stages in the same order, which holds as long
+// as funnel_stages in fetch_data.py hasn't changed mid-quarter.
+function mergeFunnel(lists) {
+  const first = lists.find(l => l && l.length > 0);
+  if (!first) return [];
+  return first.map((stage, i) => ({
+    stage: stage.stage,
+    count: lists.reduce((s, l) => s + ((l && l[i]) ? l[i].count : 0), 0),
+  }));
+}
+
+// The main quarter-mode builder — merges every loaded month in
+// (year, quarter) into one snapshot shaped exactly like a month object, so
+// every render function downstream works completely unchanged whether
+// it's handed a real month, a day snapshot, or this.
+function buildQuarterSnapshot(year, quarter) {
+  const quarterMonths = months.filter(mo => mo.year === year && findQuarter(mo.month) === quarter);
+  if (quarterMonths.length === 0) return null;
+
+  const branded_summary = sumSummaries(quarterMonths.map(m => m.branded_summary));
+  const non_branded_summary = sumSummaries(quarterMonths.map(m => m.non_branded_summary));
+  const totalClicks = branded_summary.clicks + non_branded_summary.clicks || 1;
+
+  return {
+    label: `Q${quarter} ${year}`,
+    year,
+    quarter,
+    summary: sumSummaries(quarterMonths.map(m => m.summary)),
+    branded_summary,
+    non_branded_summary,
+    branded_share_pct: Math.round((branded_summary.clicks / totalClicks) * 1000) / 10,
+    branded_keywords: mergeRowLists(quarterMonths.map(m => m.branded_keywords), "query", "clicks"),
+    non_branded_keywords: mergeRowLists(quarterMonths.map(m => m.non_branded_keywords), "query", "clicks"),
+    pages: mergeRowLists(quarterMonths.map(m => m.pages), "page", "clicks"),
+    countries: mergeRowLists(quarterMonths.map(m => m.countries), "country", "clicks"),
+    devices: mergeRowLists(quarterMonths.map(m => m.devices), "device", "clicks"),
+    key_events_by_name: mergeRowLists(quarterMonths.map(m => m.key_events_by_name || []), "label", "keyEvents"),
+    page_titles: mergeRowLists(quarterMonths.map(m => m.page_titles || []), "label", "screenPageViews"),
+    operating_systems: mergeRowLists(quarterMonths.map(m => m.operating_systems || []), "label", "activeUsers"),
+    device_users: mergeRowLists(quarterMonths.map(m => m.device_users || []), "label", "activeUsers"),
+    funnel: mergeFunnel(quarterMonths.map(m => m.funnel || [])),
+    ga4: sumGa4(quarterMonths.map(m => m.ga4)),
+    // Concatenated across however many months are actually loaded for this
+    // quarter — feeds the Trend chart the same way a single month's own
+    // .daily array would, just longer.
+    daily: quarterMonths.flatMap(m => m.daily || []).sort((a, b) => a.date.localeCompare(b.date)),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Reusable interactive table: click a header to sort, type to search
 // ---------------------------------------------------------------------------
 
@@ -869,24 +1021,28 @@ function renderCtrOpportunities(curr) {
 // ---------------------------------------------------------------------------
 
 // Kept outside the render functions so repeated calls update in place.
-let genderChart = null;
 let deviceUsersChart = null;
 let osChart = null;
 
-// "male" -> "Male", "mobile" -> "Mobile" — GA4 returns these category
-// values lowercase; OS names (e.g. "iOS", "Android") come back already
-// nicely capitalized and are used as-is.
+// "mobile" -> "Mobile" — GA4 returns these category values lowercase; OS
+// names (e.g. "iOS", "Android") come back already nicely capitalized and
+// are used as-is.
 function capitalize(s) {
   return String(s).charAt(0).toUpperCase() + String(s).slice(1).toLowerCase();
 }
 
 // Draws (or updates) one donut chart from a GA4 breakdown array (each row
-// shaped like {label, activeUsers, newUsers, ...} — see ga4_breakdown() in
-// fetch_data.py). Cycles through the design system's own palette rather
-// than inventing new colors, so charts stay visually consistent with the
-// rest of the report regardless of which brand/accent is active.
-function drawDonutChart(existingChart, canvasId, rows, metricKey, labelFormatter) {
+// shaped like {label, activeUsers, ...} — see ga4_breakdown() in
+// fetch_data.py), PLUS a matching custom legend list underneath it showing
+// "Label — count (pct%)" for every segment. Chart.js's own built-in legend
+// is turned off deliberately — it doesn't show values/percentages, and its
+// wrapping varies with how many segments a chart has, which is what made
+// the 4 cards look inconsistent with each other before. Building the
+// legend by hand keeps every card's formatting identical regardless of how
+// many segments it has.
+function drawDonutChart(existingChart, canvasId, legendId, rows, metricKey, labelFormatter) {
   const palette = [cssVar("--accent"), cssVar("--secondary"), cssVar("--positive"), cssVar("--negative"), cssVar("--muted"), cssVar("--border")];
+  const total = rows.reduce((s, r) => s + (r[metricKey] || 0), 0) || 1;
   const chartData = {
     labels: rows.map(r => (labelFormatter ? labelFormatter(r.label) : r.label)),
     datasets: [{
@@ -899,33 +1055,40 @@ function drawDonutChart(existingChart, canvasId, rows, metricKey, labelFormatter
   if (existingChart) {
     existingChart.data = chartData;
     existingChart.update();
-    return existingChart;
+  } else {
+    existingChart = new Chart(document.getElementById(canvasId).getContext("2d"), {
+      type: "doughnut",
+      data: chartData,
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+      },
+    });
   }
-  return new Chart(document.getElementById(canvasId).getContext("2d"), {
-    type: "doughnut",
-    data: chartData,
-    options: {
-      responsive: true,
-      plugins: { legend: { position: "bottom", labels: { boxWidth: 12 } } },
-    },
-  });
+
+  const legendEl = document.getElementById(legendId);
+  if (legendEl) {
+    legendEl.innerHTML = rows.map((r, i) => {
+      const label = labelFormatter ? labelFormatter(r.label) : r.label;
+      const val = r[metricKey] || 0;
+      const pct = ((val / total) * 100).toFixed(1);
+      return `<div class="donut-legend-item"><span class="swatch" style="background:${palette[i % palette.length]}"></span>${escapeHtml(label)} — ${fmtNum(val)} (${pct}%)</div>`;
+    }).join("");
+  }
+
+  return existingChart;
 }
 
-// Gender and Device Category both support a New Users / Active Users
-// toggle (the <select> next to each chart's heading); Operating System
-// only ever shows Active Users, matching what was asked for.
-function renderGenderChart(curr) {
-  const metric = document.getElementById("gender-metric-select").value;
-  genderChart = drawDonutChart(genderChart, "gender-chart", curr.gender || [], metric, capitalize);
-}
-
+// Device Category supports a New Users / Active Users toggle (the <select>
+// next to its heading); Operating System only ever shows Active Users,
+// matching what was asked for.
 function renderDeviceUsersChart(curr) {
   const metric = document.getElementById("device-users-metric-select").value;
-  deviceUsersChart = drawDonutChart(deviceUsersChart, "device-users-chart", curr.device_users || [], metric, capitalize);
+  deviceUsersChart = drawDonutChart(deviceUsersChart, "device-users-chart", "device-users-legend", curr.device_users || [], metric, capitalize);
 }
 
 function renderOsChart(curr) {
-  osChart = drawDonutChart(osChart, "os-chart", curr.operating_systems || [], "activeUsers");
+  osChart = drawDonutChart(osChart, "os-chart", "os-legend", curr.operating_systems || [], "activeUsers");
 }
 
 // Page Title/Screen and Key Events by Name reuse the same sortable/
@@ -934,8 +1097,6 @@ function renderOsChart(curr) {
 const pageTitleColumns = [
   { key: "label", label: "Page title", wrap: true, format: escapeHtml },
   { key: "screenPageViews", label: "Views", align: "num", format: fmtNum },
-  { key: "newUsers", label: "New users", align: "num", format: fmtNum },
-  { key: "activeUsers", label: "Active users", align: "num", format: fmtNum },
   { key: "keyEvents", label: "Key events", align: "num", format: fmtNum },
 ];
 function renderPageTitles(curr) {
@@ -959,12 +1120,15 @@ function renderKeyEventsByName(curr) {
 // no funnel_stages configured in fetch_data.py, so curr.funnel is just []).
 function renderFunnel(curr) {
   const wrapper = document.getElementById("funnel-wrapper");
+  const navLink = document.getElementById("nav-link-funnel");
   const rows = curr.funnel || [];
   if (rows.length === 0) {
     wrapper.style.display = "none";
+    if (navLink) navLink.style.display = "none";
     return;
   }
   wrapper.style.display = "";
+  if (navLink) navLink.style.display = "";
 
   const top = rows[0].count || 1;
   const html = rows.map((stage, i) => {
@@ -1195,7 +1359,7 @@ let deviceSplitChart = null;
 // this one is Search Console clicks by device (the others are GA4 users).
 function renderDeviceSplit(curr) {
   const rows = (curr.devices || []).map(r => ({ label: r.device, clicks: r.clicks }));
-  deviceSplitChart = drawDonutChart(deviceSplitChart, "device-split-chart", rows, "clicks", capitalize);
+  deviceSplitChart = drawDonutChart(deviceSplitChart, "device-split-chart", "device-split-legend", rows, "clicks", capitalize);
 }
 
 // ---------------------------------------------------------------------------
@@ -1212,7 +1376,7 @@ function showEmptyState(brandLabel) {
       No data yet for ${brandLabel}. Once the daily GitHub Action runs (or you trigger it manually from the Actions tab), this page will populate automatically.
     </div>`;
 
-  ["month-current", "month-compare", "day-current", "day-compare"].forEach(id => {
+  ["month-current", "month-compare", "day-current", "day-compare", "quarter-current", "quarter-compare"].forEach(id => {
     const el = document.getElementById(id);
     el.innerHTML = `<option>No data yet</option>`;
     el.disabled = true;
@@ -1248,6 +1412,19 @@ function renderAll() {
       currTrendLabel = fmtDateLabel(d1);
       compTrendLabel = fmtDateLabel(d2);
     }
+  } else if (mode === "quarter") {
+    const [y1, q1] = document.getElementById("quarter-current").value.split("-Q").map(Number);
+    const [y2, q2] = document.getElementById("quarter-compare").value.split("-Q").map(Number);
+    curr = buildQuarterSnapshot(y1, q1);
+    comp = buildQuarterSnapshot(y2, q2);
+    if (curr && comp) {
+      // Same idea as Month mode — feed the Trend chart the full merged
+      // .daily series for each quarter, just longer than a single month's.
+      currTrendSeries = curr.daily;
+      compTrendSeries = comp.daily;
+      currTrendLabel = curr.label;
+      compTrendLabel = comp.label;
+    }
   } else {
     const currIdx = Number(document.getElementById("month-current").value);
     const compIdx = Number(document.getElementById("month-compare").value);
@@ -1261,13 +1438,12 @@ function renderAll() {
     }
   }
   // Bail out quietly if anything couldn't be resolved (e.g. Day mode
-  // selected before any daily_detail exists yet) rather than rendering with
-  // half-missing data.
+  // selected before any daily_detail exists yet, or no quarter selectable
+  // yet) rather than rendering with half-missing data.
   if (!curr || !comp || !currTrendSeries || !compTrendSeries) return;
 
   renderTrendChart(currTrendSeries, currTrendLabel, compTrendSeries, compTrendLabel);
   renderSummary(curr, comp);
-  renderGenderChart(curr);
   renderDeviceUsersChart(curr);
   renderOsChart(curr);
   renderPageTitles(curr);
@@ -1319,9 +1495,30 @@ function populateDayPickers() {
   compareSel.value = days.length > 1 ? days[1] : days[0];
 }
 
+// Fills the two Quarter dropdowns from every quarter any loaded month
+// falls into, defaulting to "most recent quarter" vs. "the one before it"
+// (e.g. Q3 2026 vs. Q2 2026).
+function populateQuarterPickers() {
+  const quarters = listAvailableQuarters();
+  const currentSel = document.getElementById("quarter-current");
+  const compareSel = document.getElementById("quarter-compare");
+  currentSel.disabled = false;
+  compareSel.disabled = false;
+  if (quarters.length === 0) {
+    currentSel.innerHTML = `<option value="">No data yet</option>`;
+    compareSel.innerHTML = currentSel.innerHTML;
+    return;
+  }
+  const options = quarters.map(q => `<option value="${q.key}">${q.label}</option>`).join("");
+  currentSel.innerHTML = options;
+  compareSel.innerHTML = options;
+  currentSel.value = quarters[0].key;
+  compareSel.value = quarters.length > 1 ? quarters[1].key : quarters[0].key;
+}
+
 // Runs whenever the selected brand changes (including on first page load):
 // fetches that brand's JSON, sets the header's accent color and title to
-// match, rebuilds both sets of dropdowns, and triggers the first render.
+// match, rebuilds all three sets of dropdowns, and triggers the first render.
 async function renderBrand(brand) {
   const data = await loadBrand(brand);
   if (!data || !data.months || data.months.length === 0) {
@@ -1331,11 +1528,12 @@ async function renderBrand(brand) {
 
   months = data.months;
   document.documentElement.style.setProperty("--accent", data.color);
-  document.getElementById("brand-title").textContent = `${data.brand.toUpperCase()} — SEO Report`;
+  document.getElementById("brand-title").textContent = `${data.brand.toUpperCase()} — SEO Dashboard`;
   document.getElementById("meta-line").textContent = `Data last refreshed ${data.generated_at}`;
 
   populateMonthPickers();
   populateDayPickers();
+  populateQuarterPickers();
   renderAll();
 }
 
@@ -1353,9 +1551,10 @@ document.getElementById("brand-tabs").addEventListener("click", (e) => {
 // Switching the Compare-by dropdown between "Month" and "Day" swaps which
 // pair of dropdowns is visible, then re-renders using whichever is now shown.
 document.getElementById("compare-mode").addEventListener("change", (e) => {
-  const isDay = e.target.value === "day";
-  document.getElementById("month-controls").style.display = isDay ? "none" : "flex";
-  document.getElementById("day-controls").style.display = isDay ? "flex" : "none";
+  const mode = e.target.value;
+  document.getElementById("month-controls").style.display = mode === "month" ? "flex" : "none";
+  document.getElementById("day-controls").style.display = mode === "day" ? "flex" : "none";
+  document.getElementById("quarter-controls").style.display = mode === "quarter" ? "flex" : "none";
   renderAll();
 });
 
@@ -1366,8 +1565,9 @@ document.getElementById("month-current").addEventListener("change", renderAll);
 document.getElementById("month-compare").addEventListener("change", renderAll);
 document.getElementById("day-current").addEventListener("change", renderAll);
 document.getElementById("day-compare").addEventListener("change", renderAll);
+document.getElementById("quarter-current").addEventListener("change", renderAll);
+document.getElementById("quarter-compare").addEventListener("change", renderAll);
 document.getElementById("metric-select").addEventListener("change", renderAll);
-document.getElementById("gender-metric-select").addEventListener("change", renderAll);
 document.getElementById("device-users-metric-select").addEventListener("change", renderAll);
 
 // Kicks everything off on page load.

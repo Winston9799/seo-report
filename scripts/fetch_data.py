@@ -521,12 +521,18 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
         event_count_lookup = {r["label"]: r["eventCount"] for r in key_events_raw}
         funnel = [{"stage": name, "count": event_count_lookup.get(name, 0)} for name in funnel_stage_names]
 
+    # newUsers/activeUsers deliberately NOT requested here — they're
+    # USER-scoped metrics, but pageTitle is an EVENT-scoped dimension.
+    # GA4's API silently returns 0/null for that scope mismatch instead of
+    # erroring (unlike the GA4 UI, which just greys the combination out),
+    # so requesting them would just fill the table with fake zeros rather
+    # than real numbers. screenPageViews and keyEvents are both event-scoped
+    # like pageTitle, so those two are the metrics that actually compute.
     page_titles = ga4_breakdown(
         ga4_client, brand["ga4_property_id"], start, end, "pageTitle",
-        ["screenPageViews", "newUsers", "activeUsers", "keyEvents"],
+        ["screenPageViews", "keyEvents"],
         exclude_hostnames=exclude_ga4_hostnames, top_n=30, sort_metric="screenPageViews",
     )
-    gender = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "userGender", ["newUsers", "activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10)
     operating_systems = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "operatingSystem", ["activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10)
     device_users = ga4_breakdown(ga4_client, brand["ga4_property_id"], start, end, "deviceCategory", ["newUsers", "activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10)
 
@@ -554,7 +560,6 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
         "key_events_by_name": key_events_by_name,
         "funnel": funnel,   # [] for any brand without funnel_stages configured (e.g. DLSM)
         "page_titles": page_titles,
-        "gender": gender,
         "operating_systems": operating_systems,
         "device_users": device_users,
     }
