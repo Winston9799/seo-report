@@ -304,16 +304,27 @@ header {
 }
 
 .month-picker select {
-  background: rgba(255,255,255,0.1);
+  background-color: rgba(255,255,255,0.1);
   color: var(--white);
   border: 1px solid rgba(255,255,255,0.25);
   border-radius: 9999px;
-  padding: 7px 30px 7px 16px;   /* extra right padding — the native dropdown arrow otherwise sits flush against the pill's edge */
+  padding: 7px 34px 7px 16px;
   font-family: inherit;
   font-size: 15px;
   cursor: pointer;
   min-width: 130px;   /* stops an empty/loading <select> collapsing into a tiny blank oval */
   transition: background 0.15s;
+  /* Custom arrow with exact pixel placement — relying on padding alone to
+     push the browser's own native arrow inward doesn't work consistently
+     across browsers, since the native arrow ignores padding in some of
+     them. This hides it entirely and draws our own instead. */
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 11px;
 }
 
 .month-picker select:hover { background: rgba(255,255,255,0.18); }
@@ -324,15 +335,31 @@ header {
    chart's metric picker since that one sits on a white card, not the
    dark header */
 .month-picker-inline {
-  background: var(--white);
+  background-color: var(--white);
   color: var(--ink);
   border: 1px solid var(--border);
   border-radius: 9999px;
-  padding: 7px 30px 7px 16px;   /* extra right padding — matches .month-picker select, keeps the dropdown arrow off the edge */
+  padding: 7px 34px 7px 16px;
   font-family: inherit;
   font-size: 15px;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23000a1e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 11px;
+}
+
+/* Smaller variant used inside the 4-across Device & Audience row, where
+   the toggle needs to fit a much narrower column */
+.month-picker-inline.mini {
+  padding: 4px 26px 4px 10px;
+  font-size: 12px;
+  background-position: right 10px center;
+  background-size: 9px;
 }
 
 .month-picker-inline:hover { background: var(--surface); border-color: var(--accent); }
@@ -430,6 +457,24 @@ section { margin-top: 48px; }
   border-radius: var(--radius-base);
   overflow: hidden;
   border: 1px solid var(--border);
+}
+
+.distribution-segment { cursor: pointer; transition: filter 0.15s; }
+.distribution-segment:hover { filter: brightness(0.88); }
+
+.distribution-legend-item {
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  transition: background 0.15s;
+}
+.distribution-legend-item:hover { background: var(--surface); }
+
+.expand-hint {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
 }
 
 /* ============================================================
@@ -590,6 +635,90 @@ tr.row-swing-down:hover td { background: rgba(219, 86, 20, 0.15); }
    gets a chance to kick in. This one rule is what actually makes tables
    scroll within their own box instead of overflowing the page. */
 .two-col > div { min-width: 0; }
+
+/* Used for the Device & Audience row at the bottom of the report — 4 small
+   donut charts side by side. Falls back to 2-across, then 1-across, as the
+   screen narrows (same min-width:0 fix as .two-col, applied from the start
+   this time rather than discovered after the fact). */
+.four-col {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.four-col > div { min-width: 0; }
+
+@media (max-width: 900px) {
+  .four-col { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 500px) {
+  .four-col { grid-template-columns: 1fr; }
+}
+
+.donut-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+
+.donut-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---------- Conversion funnel ---------- */
+
+.funnel-stage-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+.funnel-stage-name { font-weight: 700; }
+.funnel-stage-count { font-weight: 600; }
+
+.funnel-bar-track {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  overflow: hidden;
+  height: 36px;
+}
+.funnel-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.funnel-stage-meta {
+  display: flex;
+  gap: 16px;
+  margin-top: 6px;
+  margin-bottom: 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.funnel-stage-meta b { color: var(--ink); }
+.funnel-dropoff, .funnel-dropoff b { color: var(--negative); }
+
+.funnel-arrow {
+  text-align: center;
+  color: var(--border);
+  font-size: 16px;
+  margin: 2px 0 10px;
+}
 
 @media (max-width: 760px) {
   .two-col { grid-template-columns: 1fr; }  /* stack side-by-side tables on mobile instead of squeezing them */
