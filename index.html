@@ -203,20 +203,40 @@
   <div id="pages-by-category"></div>
 
   <!-- ================================================================
-       TOP COUNTRIES / DEVICE SPLIT (side by side)
-       Filled in by renderCountries() and renderDeviceSplit().
+       TOP COUNTRIES
+       Two quick-glance horizontal bar charts (current period only), then
+       the full sortable/searchable table below. Filled in by
+       renderCountryCharts() and renderCountries().
        ================================================================ -->
   <section>
+    <div class="section-head"><h2>Top countries</h2></div>
     <div class="two-col">
       <div>
-        <div class="section-head"><h2>Top countries</h2></div>
-        <div id="countries-table"></div>
+        <div class="section-note" style="margin-bottom:8px;">Top 10 by impressions</div>
+        <div style="background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px;">
+          <canvas id="country-impressions-chart" height="240"></canvas>
+        </div>
       </div>
       <div>
-        <div class="section-head"><h2>Device split</h2></div>
-        <div id="device-split"></div>
+        <div class="section-note" style="margin-bottom:8px;">Top 10 by clicks</div>
+        <div style="background:var(--white); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px;">
+          <canvas id="country-clicks-chart" height="240"></canvas>
+        </div>
       </div>
     </div>
+    <div style="margin-top:24px;">
+      <div class="section-note" style="margin-bottom:8px;">Full list</div>
+      <div id="countries-table"></div>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       DEVICE SPLIT
+       Filled in by renderDeviceSplit().
+       ================================================================ -->
+  <section>
+    <div class="section-head"><h2>Device split</h2></div>
+    <div id="device-split"></div>
   </section>
 
 </div>
