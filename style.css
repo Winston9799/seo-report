@@ -326,7 +326,7 @@ header {
      the page — 60% is the more see-through-but-still-legible middle
      ground. If it still feels too transparent, raise this number; if you
      want more see-through and don't mind slightly less contrast, lower it. */
-  background: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   color: var(--white);
@@ -452,6 +452,26 @@ header {
 }
 
 .month-picker-inline:hover { background: var(--surface); border-color: var(--accent); }
+
+/* Header-only override: every dropdown inside the header (including
+   #compare-mode, which normally uses the light .month-picker-inline
+   styling meant for white cards elsewhere on the page — Trend chart's
+   metric picker, the donut toggles) gets a darker, more opaque fill
+   instead. This exists specifically because the header background itself
+   became translucent/brand-colored — the light pill fill that worked
+   fine against the old solid dark header doesn't stand out as clearly
+   against a background that's now translucent and color-shifting. Scoped
+   to "header select" so it only affects dropdowns actually inside the
+   header, leaving every other .month-picker-inline usage on the page
+   (which sits on plain white cards, not the header) untouched. */
+header select {
+  background-color: rgba(0, 0, 0, 0.35);
+  color: var(--white);
+  border-color: rgba(255, 255, 255, 0.3);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+
+header select:hover { background-color: rgba(0, 0, 0, 0.5); }
 
 .meta-line {
   font-size: 12px;
