@@ -1121,6 +1121,26 @@ function drawDonutChart(existingChart, canvasId, legendId, rows, metricKey, labe
 // they come through as `undefined` (not just an empty array) when a day
 // is selected. That distinction is exactly what "unavailable in Day mode"
 // vs. "genuinely zero rows" hinges on below.
+// The SAME undefined value (a field simply missing from curr) can mean two
+// completely different things, which look identical to the code but need
+// different messages for a person reading them:
+//   1. Genuinely Day mode — these GA4 breakdowns are only ever computed
+//      monthly in fetch_data.py, so no amount of re-fetching adds them to
+//      a day snapshot. This is architectural, not a data gap.
+//   2. Month or Quarter mode, but this specific period predates when the
+//      field was added to fetch_data.py, and hasn't been backfilled since
+//      (see FULL_REFRESH in fetch_data.py / PROJECT_NOTES.md section 2f).
+//      This IS fixable — a full_refresh run backfills it.
+// Checking the live #compare-mode value (not just "was curr built by
+// buildDaySnapshot") is what lets this tell the two apart correctly.
+function unavailableMessage(thingLabel) {
+  const mode = document.getElementById("compare-mode").value;
+  if (mode === "day") {
+    return `This data isn't available in Day mode — GA4 ${thingLabel} breakdowns are only computed at the monthly level, not daily. Switch to Month or Quarter mode to see this.`;
+  }
+  return `This period's archived data predates when ${thingLabel} tracking was added, so it hasn't been backfilled yet. Run a full refresh (Actions tab → Run workflow → tick "full_refresh") to fill it in, or pick a more recent period.`;
+}
+
 function renderDeviceUsersChart(curr) {
   const canvas = document.getElementById("device-users-chart");
   const legend = document.getElementById("device-users-legend");
@@ -1128,6 +1148,7 @@ function renderDeviceUsersChart(curr) {
   if (curr.device_users === undefined) {
     canvas.style.display = "none";
     legend.style.display = "none";
+    placeholder.textContent = unavailableMessage("device");
     placeholder.style.display = "";
     return;
   }
@@ -1145,6 +1166,7 @@ function renderOsChart(curr) {
   if (curr.operating_systems === undefined) {
     canvas.style.display = "none";
     legend.style.display = "none";
+    placeholder.textContent = unavailableMessage("operating system");
     placeholder.style.display = "";
     return;
   }
@@ -1165,7 +1187,7 @@ const pageTitleColumns = [
 function renderPageTitles(curr) {
   const container = document.getElementById("page-titles-table");
   if (curr.page_titles === undefined) {
-    container.innerHTML = `<div class="chart-unavailable">This data isn't available in Day mode — GA4 page-title breakdowns are only computed at the monthly level, not daily. Switch to Month or Quarter mode to see this table.</div>`;
+    container.innerHTML = `<div class="chart-unavailable">${unavailableMessage("page-title")}</div>`;
     return;
   }
   createInteractiveTable(container, pageTitleColumns, curr.page_titles, {
@@ -1180,7 +1202,7 @@ const keyEventColumns = [
 function renderKeyEventsByName(curr) {
   const container = document.getElementById("key-events-table");
   if (curr.key_events_by_name === undefined) {
-    container.innerHTML = `<div class="chart-unavailable">This data isn't available in Day mode — GA4 key event breakdowns are only computed at the monthly level, not daily. Switch to Month or Quarter mode to see this table.</div>`;
+    container.innerHTML = `<div class="chart-unavailable">${unavailableMessage("key event")}</div>`;
     return;
   }
   createInteractiveTable(container, keyEventColumns, curr.key_events_by_name, {
