@@ -317,7 +317,16 @@ header {
      moment you scroll past the video onto the page's white background.
      The blur is what keeps it feeling "glassy" rather than just a plain
      dark tint. */
-  background: rgba(0, 10, 30, 0.72);
+  /* color-mix blends the LIVE --accent (brand color, swapped by app.js on
+     brand switch) with transparency — this is what makes the header
+     dynamically red for Anzo / blue for DLSM, at whatever translucency %
+     is set here, without needing JS to pre-compute an rgba() string.
+     45%/50% would look great over the dark hero video but risks getting
+     too pale for white text once scrolled onto a bright white section of
+     the page — 60% is the more see-through-but-still-legible middle
+     ground. If it still feels too transparent, raise this number; if you
+     want more see-through and don't mind slightly less contrast, lower it. */
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   color: var(--white);
