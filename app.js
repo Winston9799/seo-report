@@ -712,48 +712,100 @@ function renderSplit(curr) {
 // 11-20, 21+). Only counts keywords that have a position at all.
 function computePositionDistribution(rows) {
   const buckets = [
-    { label: "Top 3", test: p => p <= 3, count: 0 },
-    { label: "4–10", test: p => p > 3 && p <= 10, count: 0 },
-    { label: "11–20", test: p => p > 10 && p <= 20, count: 0 },
-    { label: "21+", test: p => p > 20, count: 0 },
+    { label: "Top 3", test: p => p <= 3, count: 0, rows: [] },
+    { label: "4–10", test: p => p > 3 && p <= 10, count: 0, rows: [] },
+    { label: "11–20", test: p => p > 10 && p <= 20, count: 0, rows: [] },
+    { label: "21+", test: p => p > 20, count: 0, rows: [] },
   ];
   let total = 0;
   rows.forEach(r => {
     if (r.position === null || r.position === undefined) return;
     total++;
     const b = buckets.find(b => b.test(r.position));
-    if (b) b.count++;
+    if (b) { b.count++; b.rows.push(r); }
   });
   return { buckets, total: total || 1 };  // total||1 avoids a divide-by-zero if there's no data at all
 }
 
+// Columns for the expanded keyword list under each Visibility Distribution
+// bucket — deliberately no "Δ" column (unlike keywordColumns elsewhere):
+// this section only ever shows the CURRENT period, same as CTR
+// Opportunities, so there's no comparison value to show.
+const positionDetailColumns = [
+  { key: "query", label: "Query", wrap: true, format: escapeHtml },
+  { key: "type", label: "Type" },
+  { key: "clicks", label: "Clicks", align: "num", format: fmtNum },
+  { key: "impressions", label: "Impressions", align: "num", format: fmtNum },
+  { key: "ctr", label: "CTR", align: "num", format: v => fmtPct(v) },
+  { key: "position", label: "Position", align: "num", defaultDir: "asc" },
+];
+
 // Draws the stacked distribution bar and legend under "Visibility distribution".
 // Combines branded + non-branded keywords together — this section is about
 // overall ranking health, not the branded/non-branded split (that's the
-// section above it).
+// section above it). Clicking a bucket (bar segment or legend row) expands
+// a sortable/searchable table of exactly which keywords fall in that range,
+// so the aggregate percentage isn't a dead end — clicking "again" on the
+// same bucket collapses it back.
 function renderPositionDistribution(curr) {
-  const allKw = [...curr.branded_keywords, ...curr.non_branded_keywords];
+  const allKw = [
+    ...curr.branded_keywords.map(r => ({ ...r, type: "Branded" })),
+    ...curr.non_branded_keywords.map(r => ({ ...r, type: "Non-branded" })),
+  ];
   const { buckets, total } = computePositionDistribution(allKw);
   const colors = ["var(--accent)", "var(--secondary)", "var(--muted)", "var(--border)"];
 
   const barHtml = buckets.map((b, i) => {
     const pct = (b.count / total) * 100;
-    return `<div style="width:${pct}%; background:${colors[i]};" title="${b.label}: ${b.count} (${pct.toFixed(1)}%)"></div>`;
+    return `<div class="distribution-segment" data-bucket="${i}" style="width:${pct}%; background:${colors[i]};" title="${b.label}: ${b.count} (${pct.toFixed(1)}%) — click to see keywords"></div>`;
   }).join("");
 
   const legendHtml = buckets.map((b, i) => {
     const pct = (b.count / total) * 100;
-    return `<div><span class="swatch" style="background:${colors[i]}"></span>${b.label} — ${b.count} (${pct.toFixed(1)}%)</div>`;
+    return `
+      <div class="distribution-legend-item" data-bucket="${i}">
+        <span class="swatch" style="background:${colors[i]}"></span>${b.label} — ${b.count} (${pct.toFixed(1)}%)
+        <span class="expand-hint">▸ view keywords</span>
+      </div>`;
   }).join("");
 
   document.getElementById("position-distribution").innerHTML = `
     <div class="distribution-bar">${barHtml}</div>
-    <div class="split-legend">${legendHtml}</div>`;
+    <div class="split-legend" id="distribution-legend">${legendHtml}</div>
+    <div id="position-distribution-detail" style="display:none; margin-top:16px;"></div>`;
 
   // Honesty note shown under the section heading: this is only "your top N
   // TRACKED keywords" (the top-200-per-bucket the data script kept), not
   // literally every keyword the site ranks for.
-  document.getElementById("distribution-note").textContent = `Based on your top ${allKw.length} tracked keywords for ${curr.label}`;
+  document.getElementById("distribution-note").textContent = `Based on your top ${allKw.length} tracked keywords for ${curr.label} — click a range to see its keywords`;
+
+  const detailContainer = document.getElementById("position-distribution-detail");
+  let activeBucket = null;
+
+  function showBucket(i) {
+    const bucket = buckets[i];
+    detailContainer.style.display = "block";
+    detailContainer.innerHTML = `
+      <div class="section-note" style="margin-bottom:8px;">${bucket.label} — ${bucket.count} keyword${bucket.count === 1 ? "" : "s"}</div>
+      <div class="distribution-detail-table"></div>`;
+    createInteractiveTable(detailContainer.querySelector(".distribution-detail-table"), positionDetailColumns, bucket.rows, {
+      searchKey: "query", defaultSortKey: "clicks", defaultSortDir: "desc",
+    });
+  }
+
+  document.querySelectorAll("#position-distribution [data-bucket]").forEach(el => {
+    el.addEventListener("click", () => {
+      const i = Number(el.dataset.bucket);
+      if (activeBucket === i) {
+        activeBucket = null;
+        detailContainer.style.display = "none";
+        detailContainer.innerHTML = "";
+      } else {
+        activeBucket = i;
+        showBucket(i);
+      }
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -876,22 +928,15 @@ function renderOsChart(curr) {
   osChart = drawDonutChart(osChart, "os-chart", curr.operating_systems || [], "activeUsers");
 }
 
-// Interests, Page Title/Screen, and Key Events by Name all reuse the same
-// sortable/searchable table component as the rest of the report (see
+// Page Title/Screen and Key Events by Name reuse the same sortable/
+// searchable table component as the rest of the report (see
 // createInteractiveTable above) — current period only, same as the donuts.
-const interestColumns = [
-  { key: "label", label: "Interest", wrap: true, format: escapeHtml },
-  { key: "activeUsers", label: "Active users", align: "num", format: fmtNum },
-];
-function renderInterests(curr) {
-  createInteractiveTable(document.getElementById("interests-table"), interestColumns, curr.interests || [], {
-    searchKey: "label", defaultSortKey: "activeUsers", defaultSortDir: "desc",
-  });
-}
-
 const pageTitleColumns = [
   { key: "label", label: "Page title", wrap: true, format: escapeHtml },
   { key: "screenPageViews", label: "Views", align: "num", format: fmtNum },
+  { key: "newUsers", label: "New users", align: "num", format: fmtNum },
+  { key: "activeUsers", label: "Active users", align: "num", format: fmtNum },
+  { key: "keyEvents", label: "Key events", align: "num", format: fmtNum },
 ];
 function renderPageTitles(curr) {
   createInteractiveTable(document.getElementById("page-titles-table"), pageTitleColumns, curr.page_titles || [], {
@@ -907,6 +952,45 @@ function renderKeyEventsByName(curr) {
   createInteractiveTable(document.getElementById("key-events-table"), keyEventColumns, curr.key_events_by_name || [], {
     searchKey: "label", defaultSortKey: "keyEvents", defaultSortDir: "desc",
   });
+}
+
+// Hand-built funnel (Chart.js has no native funnel chart type) — Anzo only;
+// hidden entirely for any brand with no funnel data (e.g. DLSM, which has
+// no funnel_stages configured in fetch_data.py, so curr.funnel is just []).
+function renderFunnel(curr) {
+  const wrapper = document.getElementById("funnel-wrapper");
+  const rows = curr.funnel || [];
+  if (rows.length === 0) {
+    wrapper.style.display = "none";
+    return;
+  }
+  wrapper.style.display = "";
+
+  const top = rows[0].count || 1;
+  const html = rows.map((stage, i) => {
+    const funnelPct = (stage.count / top) * 100;
+    const barWidth = Math.max(funnelPct, 4); // keeps very small bars visibly present rather than a sliver
+    const prevCount = i > 0 ? rows[i - 1].count : null;
+    const dropoffPct = prevCount ? ((prevCount - stage.count) / prevCount) * 100 : null;
+    const arrow = i > 0 ? `<div class="funnel-arrow">▼</div>` : "";
+    const dropoffHtml = dropoffPct !== null
+      ? `<span class="funnel-dropoff">Drop-off: <b>${dropoffPct.toFixed(1)}%</b> vs. previous stage</span>`
+      : "";
+    return `
+      ${arrow}
+      <div>
+        <div class="funnel-stage-head">
+          <span class="funnel-stage-name">${escapeHtml(stage.stage)}</span>
+          <span class="funnel-stage-count">${fmtNum(stage.count)}</span>
+        </div>
+        <div class="funnel-bar-track"><div class="funnel-bar-fill" style="width:${barWidth}%">${funnelPct.toFixed(1)}%</div></div>
+        <div class="funnel-stage-meta">
+          <span>Funnel: <b>${funnelPct.toFixed(1)}%</b> of ${escapeHtml(rows[0].stage)}</span>
+          ${dropoffHtml}
+        </div>
+      </div>`;
+  }).join("");
+  document.getElementById("funnel-container").innerHTML = html;
 }
 
 // ---------------------------------------------------------------------------
@@ -1003,7 +1087,7 @@ function renderPagesByCategory(curr, comp) {
   });
 
   // Dynamic categories first in the defined order, "Static Pages" always last.
-  const orderedKeys = [...PAGE_CATEGORIES.map(c => c.key), "static"];
+  const orderedKeys = ["static", ...PAGE_CATEGORIES.map(c => c.key)];
   const container = document.getElementById("pages-by-category");
   container.innerHTML = "";
 
@@ -1104,16 +1188,14 @@ function renderCountries(curr, comp) {
 // searchable — there are only ever a handful of devices, so a plain list of
 // bars is clearer than a full interactive table. Only depends on the current
 // period (no comparison shown here).
+// Kept outside the render function so repeated calls update in place.
+let deviceSplitChart = null;
+
+// Now a donut, matching the other 3 charts in the Device & Audience row —
+// this one is Search Console clicks by device (the others are GA4 users).
 function renderDeviceSplit(curr) {
-  const rows = curr.devices;
-  const max = Math.max(...rows.map(r => r.clicks), 1);
-  const html = rows.map(r => `
-    <div class="device-row">
-      <div>${r.device.charAt(0) + r.device.slice(1).toLowerCase()}</div>
-      <div class="device-bar-track"><div class="device-bar-fill" style="width:${(r.clicks / max) * 100}%"></div></div>
-      <div class="num">${fmtNum(r.clicks)}</div>
-    </div>`).join("");
-  document.getElementById("device-split").innerHTML = `<div class="device-list">${html}</div>`;
+  const rows = (curr.devices || []).map(r => ({ label: r.device, clicks: r.clicks }));
+  deviceSplitChart = drawDonutChart(deviceSplitChart, "device-split-chart", rows, "clicks", capitalize);
 }
 
 // ---------------------------------------------------------------------------
@@ -1188,9 +1270,9 @@ function renderAll() {
   renderGenderChart(curr);
   renderDeviceUsersChart(curr);
   renderOsChart(curr);
-  renderInterests(curr);
   renderPageTitles(curr);
   renderKeyEventsByName(curr);
+  renderFunnel(curr);
   renderSplit(curr);
   renderPositionDistribution(curr);
   renderCtrOpportunities(curr);
