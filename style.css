@@ -597,7 +597,7 @@ section[id], #pages-by-category { scroll-margin-top: 130px; }
   font-weight: 600;
   font-size: 27px;
   line-height: 1.25;
-  color: var(--ink);
+  color: var(--accent);
 }
 
 .persona-facts {
@@ -605,6 +605,12 @@ section[id], #pages-by-category { scroll-margin-top: 130px; }
   grid-template-columns: 1fr 1fr;
   gap: 32px;
   margin-bottom: 24px;
+  /* No min-height here on purpose — see equalizePersonaFactsHeights() in
+     app.js. A fixed px guess kept being wrong without a real browser to
+     verify against (190px, then 230px, still off). JS measures each card's
+     ACTUAL rendered height after paint and sets them all to match the
+     tallest one — exact, and self-correcting for any future quarter's
+     text length instead of another manual guess. */
 }
 
 .persona-facts-label {
