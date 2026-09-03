@@ -515,8 +515,28 @@ section[id], #pages-by-category { scroll-margin-top: 130px; }
   .hero-banner { height: 300px; }   /* was 200px — same 1.5x scaling for mobile */
 }
 
-.highlight-legend {
+.report-notes {
   margin-top: 20px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.note-scope {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.note-scope strong {
+  color: var(--secondary);
+}
+
+.highlight-legend {
   display: flex;
   gap: 24px;
   flex-wrap: wrap;
