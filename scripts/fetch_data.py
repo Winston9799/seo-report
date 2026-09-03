@@ -36,15 +36,18 @@ from google.analytics.data_v1beta.types import DateRange, Dimension, Metric, Run
 # CONFIG — edit this section for your own properties
 # ---------------------------------------------------------------------------
 
-# One entry per brand. "brand_keyword" drives the branded/non-branded split —
-# any search query containing this text (case-insensitive) counts as branded.
+# One entry per brand. "brand_keywords" drives the branded/non-branded split —
+# any search query containing ANY of these (case-insensitive) counts as
+# branded. A list rather than a single string because brands can have more
+# than one real name searchers use — e.g. Anzo's Chinese-market audience
+# searches "昂首资本" (Anzo Capital's Chinese name), not "anzo".
 BRANDS = [
     {
         "label": "Anzo",
         "color": "#b22333",
         "ga4_property_id": "480686179",
         "gsc_site_url": "sc-domain:anzocapital.com",
-        "brand_keyword": "anzo capital",   # any query containing this = branded
+        "brand_keywords": ["anzo", "昂首资本"],   # any query containing either = branded. "anzo" was "anzo capital" (widened — bare "anzo" was 304 clicks/quarter falling into non-branded). "昂首资本" is Anzo Capital's Chinese name — was missing entirely, so Chinese-script brand searches were being counted as non-branded.
         # These subdomains (portal login, file server) aren't real content —
         # excluded from every GSC row server-side, and every GA4 row by hostname,
         # before any total/keyword/page/country/device number is calculated.
@@ -59,7 +62,7 @@ BRANDS = [
         "color": "#0156fc",
         "ga4_property_id": "474006416",
         "gsc_site_url": "sc-domain:dlsm.com",
-        "brand_keyword": "dlsm",
+        "brand_keywords": ["dlsm"],
     },
 ]
 
@@ -186,7 +189,7 @@ def normalize_for_brand_match(s):
     catches spacing variants of the same term — e.g. "anzo capital",
     "anzocapital", and "anzo-capital" all normalize to "anzocapital" and
     match each other. Without this, a literal substring check on
-    brand_keyword would miss any query that just happens to be typed (or
+    brand_keywords would miss any query that just happens to be typed (or
     URL-slugged) without the space."""
     return re.sub(r"[\s\-_]+", "", s.lower())
 
@@ -441,8 +444,10 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
     # --- Branded vs. non-branded split ---
     # normalize_for_brand_match strips spaces/hyphens so "anzo capital",
     # "anzocapital", and "anzo-capital" are all treated as the same term.
-    brand_kw = normalize_for_brand_match(brand["brand_keyword"])
-    is_branded = lambda q: brand_kw in normalize_for_brand_match(q)
+    # A query counts as branded if it matches ANY of the brand's keywords
+    # (e.g. Anzo matches on either "anzo" or its Chinese name "昂首资本").
+    brand_kws = [normalize_for_brand_match(kw) for kw in brand["brand_keywords"]]
+    is_branded = lambda q: any(kw in normalize_for_brand_match(q) for kw in brand_kws)
 
     branded_rows = [r for r in qc if is_branded(r["query"])]
     nonbranded_rows = [r for r in qc if not is_branded(r["query"])]
