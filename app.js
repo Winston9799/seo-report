@@ -1724,98 +1724,191 @@ function populateQuarterPickers() {
 // Signals differently, or traffic volume grows a lot), re-run that script
 // first rather than trusting the numbers on faith.
 // ---------------------------------------------------------------------------
+// Each brand is now an ARRAY of quarter snapshots, newest first — this is
+// what makes the scroll row work: renderPersona() just renders one card per
+// array entry, in order. To add a new quarter each rebuild, unshift() the
+// new quarter object onto the front of the array (don't append) — older
+// quarters automatically get pushed right/behind in the scroll row with no
+// other code changes needed.
 const PERSONA = {
-  anzo: {
-    periodLabel: "Q2 2026",
-    archetype: "The brand-aware trader, arriving on mobile",
-    facts: [
-      {
-        label: "Who they are",
-        items: [
-          "A brand-aware trader already searching for Anzo by name, mostly from Nigeria, Kenya, or Malaysia",
-          "Finds the site on a mobile phone far more often than desktop",
-        ],
-      },
-      {
-        label: "This quarter",
-        items: [
-          "Two-thirds of visitors were brand new to the site",
-          "The organic funnel went quiet — just 2 first-time deposits across three months, before rebounding into July and August",
-        ],
-      },
-    ],
-    stats: [
-      { value: "91.0%", label: "Branded search (GSC)" },
-      { value: "64%", label: "Mobile search clicks (GSC)" },
-      { value: "71%", label: "Engaged sessions (GA4)" },
-      { value: "65%", label: "New visitors (GA4)" },
-    ],
-    friction: [
-      "USA ranks pos. 12.9 across 26,596 impressions but converts just 0.7% — a lot of visibility, very few clicks.",
-      "The MT5 price-alert blog post ranks well (pos. 7.2) yet earns only a 1.6% CTR — the searcher's question likely isn't answered in the title/snippet.",
-    ], // not currently rendered — see renderPersona(), dropped from the card by request
-    countries: [
-      { label: "Nigeria", pct: 35.3 },
-      { label: "Kenya", pct: 11.5 },
-      { label: "Malaysia", pct: 9.9 },
-      { label: "USA", pct: 7.1 },
-      { label: "Philippines", pct: 5.3 },
-    ],
-    devices: [
-      { label: "Mobile", pct: 64.4 },
-      { label: "Desktop", pct: 34.3 },
-      { label: "Tablet", pct: 1.3 },
-    ],
-    funnel: [
-      { label: "Leads", count: 1 },
-      { label: "Registered", count: 3 },
-      { label: "Approved", count: 2 },
-      { label: "Funded", count: 2 },
-    ], // not currently rendered — see renderPersona(), dropped from the card by request
-  },
-  dlsm: {
-    periodLabel: "Q2 2026",
-    archetype: "The near-total brand searcher",
-    facts: [
-      {
-        label: "Who they are",
-        items: [
-          "Already knows the DLSM name and searches for it directly — arriving from Malaysia, Australia, or Indonesia",
-          "Splits close to evenly between mobile and desktop",
-        ],
-      },
-      {
-        label: "This quarter",
-        items: [
-          "Essentially no organic \"discovery\" happening — non-branded search barely registers",
-          "Most non-brand queries that do appear are just brand-name typos, not real topical interest",
-        ],
-      },
-    ],
-    stats: [
-      { value: "99.1%", label: "Branded search (GSC)" },
-      { value: "56%", label: "Mobile search clicks (GSC)" },
-      { value: "77%", label: "Engaged sessions (GA4)" },
-      { value: "56%", label: "New visitors (GA4)" },
-    ],
-    friction: [
-      "Pakistan ranks pos. 3.9 — a strong result — but converts only 3.4% of 2,426 impressions.",
-      "The meta-trader page ranks pos. 1.9, close to the top spot, yet earns just 0.5% CTR.",
-    ], // not currently rendered — see renderPersona(), dropped from the card by request
-    countries: [
-      { label: "Malaysia", pct: 27.3 },
-      { label: "Australia", pct: 13.0 },
-      { label: "Indonesia", pct: 9.8 },
-      { label: "USA", pct: 9.8 },
-      { label: "Japan", pct: 7.5 },
-    ],
-    devices: [
-      { label: "Mobile", pct: 55.9 },
-      { label: "Desktop", pct: 43.3 },
-      { label: "Tablet", pct: 0.8 },
-    ],
-    funnel: null, // no conversion funnel configured for DLSM — see funnel_stages in fetch_data.py
-  },
+  anzo: [
+    {
+      periodLabel: "Q2 2026",
+      archetype: "The brand-aware trader, arriving on mobile",
+      facts: [
+        {
+          label: "Who they are",
+          items: [
+            "A brand-aware trader already searching for Anzo by name, mostly from Nigeria, Kenya, or Malaysia",
+            "Finds the site on a mobile phone far more often than desktop",
+          ],
+        },
+        {
+          label: "This quarter",
+          items: [
+            "Two-thirds of visitors were brand new to the site",
+            "The organic funnel went quiet — just 2 first-time deposits across three months, before rebounding into July and August",
+          ],
+        },
+      ],
+      stats: [
+        { value: "91.0%", label: "Branded search (GSC)" },
+        { value: "64%", label: "Mobile search clicks (GSC)" },
+        { value: "71%", label: "Engaged sessions (GA4)" },
+        { value: "65%", label: "New visitors (GA4)" },
+      ],
+      friction: [
+        "USA ranks pos. 12.9 across 26,596 impressions but converts just 0.7% — a lot of visibility, very few clicks.",
+        "The MT5 price-alert blog post ranks well (pos. 7.2) yet earns only a 1.6% CTR — the searcher's question likely isn't answered in the title/snippet.",
+      ], // not currently rendered — see renderPersona(), dropped from the card by request
+      countries: [
+        { label: "Nigeria", pct: 35.3 },
+        { label: "Kenya", pct: 11.5 },
+        { label: "Malaysia", pct: 9.9 },
+        { label: "USA", pct: 7.1 },
+        { label: "Philippines", pct: 5.3 },
+      ],
+      devices: [
+        { label: "Mobile", pct: 64.4 },
+        { label: "Desktop", pct: 34.3 },
+        { label: "Tablet", pct: 1.3 },
+      ],
+      funnel: [
+        { label: "Leads", count: 1 },
+        { label: "Registered", count: 3 },
+        { label: "Approved", count: 2 },
+        { label: "Funded", count: 2 },
+      ], // not currently rendered — see renderPersona(), dropped from the card by request
+    },
+    {
+      periodLabel: "Q1 2026",
+      archetype: "The brand-aware trader, arriving on mobile",
+      facts: [
+        {
+          label: "Who they are",
+          items: [
+            "A brand-aware trader searching for Anzo by name, mostly from Nigeria, Indonesia, or Malaysia",
+            "Finds the site on a mobile phone more often than desktop, same pattern as Q2",
+          ],
+        },
+        {
+          label: "This quarter",
+          items: [
+            "96.1% of search clicks were branded — even more concentrated than Q2's 91.0%, meaning non-branded discovery grew a little going into Q2",
+            "The funnel shows 14 registrations and 3 funded accounts despite zero attributed leads this quarter — likely leads carried over from December",
+          ],
+        },
+      ],
+      stats: [
+        { value: "96.1%", label: "Branded search (GSC)" },
+        { value: "59%", label: "Mobile search clicks (GSC)" },
+        { value: "72%", label: "Engaged sessions (GA4)" },
+        { value: "63%", label: "New visitors (GA4)" },
+      ],
+      countries: [
+        { label: "Nigeria", pct: 38.7 },
+        { label: "Indonesia", pct: 9.0 },
+        { label: "Malaysia", pct: 6.5 },
+        { label: "Philippines", pct: 4.6 },
+        { label: "Kenya", pct: 4.3 },
+      ],
+      devices: [
+        { label: "Mobile", pct: 58.9 },
+        { label: "Desktop", pct: 40.3 },
+        { label: "Tablet", pct: 0.8 },
+      ],
+      funnel: [
+        { label: "Leads", count: 0 },
+        { label: "Registered", count: 14 },
+        { label: "Approved", count: 14 },
+        { label: "Funded", count: 3 },
+      ], // not currently rendered
+    },
+  ],
+  dlsm: [
+    {
+      periodLabel: "Q2 2026",
+      archetype: "The near-total brand searcher",
+      facts: [
+        {
+          label: "Who they are",
+          items: [
+            "Already knows the DLSM name and searches for it directly — arriving from Malaysia, Australia, or Indonesia",
+            "Splits close to evenly between mobile and desktop",
+          ],
+        },
+        {
+          label: "This quarter",
+          items: [
+            "Essentially no organic \"discovery\" happening — non-branded search barely registers",
+            "Most non-brand queries that do appear are just brand-name typos, not real topical interest",
+          ],
+        },
+      ],
+      stats: [
+        { value: "99.1%", label: "Branded search (GSC)" },
+        { value: "56%", label: "Mobile search clicks (GSC)" },
+        { value: "77%", label: "Engaged sessions (GA4)" },
+        { value: "56%", label: "New visitors (GA4)" },
+      ],
+      friction: [
+        "Pakistan ranks pos. 3.9 — a strong result — but converts only 3.4% of 2,426 impressions.",
+        "The meta-trader page ranks pos. 1.9, close to the top spot, yet earns just 0.5% CTR.",
+      ], // not currently rendered — see renderPersona(), dropped from the card by request
+      countries: [
+        { label: "Malaysia", pct: 27.3 },
+        { label: "Australia", pct: 13.0 },
+        { label: "Indonesia", pct: 9.8 },
+        { label: "USA", pct: 9.8 },
+        { label: "Japan", pct: 7.5 },
+      ],
+      devices: [
+        { label: "Mobile", pct: 55.9 },
+        { label: "Desktop", pct: 43.3 },
+        { label: "Tablet", pct: 0.8 },
+      ],
+      funnel: null, // no conversion funnel configured for DLSM — see funnel_stages in fetch_data.py
+    },
+    {
+      periodLabel: "Q1 2026",
+      archetype: "The near-total brand searcher",
+      facts: [
+        {
+          label: "Who they are",
+          items: [
+            "Already knows the DLSM name and searches for it directly — this quarter led by Pakistan, Indonesia, and Australia rather than Malaysia alone",
+            "Mobile leads over desktop, consistent with Q2",
+          ],
+        },
+        {
+          label: "This quarter",
+          items: [
+            "99.4% branded — even more concentrated than Q2's already-high 99.1%",
+            "Non-branded search stayed negligible, the same pattern seen every quarter so far",
+          ],
+        },
+      ],
+      stats: [
+        { value: "99.4%", label: "Branded search (GSC)" },
+        { value: "60%", label: "Mobile search clicks (GSC)" },
+        { value: "70%", label: "Engaged sessions (GA4)" },
+        { value: "61%", label: "New visitors (GA4)" },
+      ],
+      countries: [
+        { label: "Pakistan", pct: 17.6 },
+        { label: "Indonesia", pct: 12.7 },
+        { label: "Australia", pct: 12.6 },
+        { label: "Malaysia", pct: 11.4 },
+        { label: "USA", pct: 6.1 },
+      ],
+      devices: [
+        { label: "Mobile", pct: 60.2 },
+        { label: "Desktop", pct: 38.9 },
+        { label: "Tablet", pct: 0.8 },
+      ],
+      funnel: null,
+    },
+  ],
 };
 
 // Same six-tone sequence the Device & Audience donuts use elsewhere in the
@@ -1862,13 +1955,9 @@ function personaDeviceDonut(devices) {
     </div>`;
 }
 
-function renderPersona(brand) {
-  const p = PERSONA[brand];
-  const container = document.getElementById("persona-card");
-  const periodEl = document.getElementById("persona-period");
-  if (!p || !container) return;
-  periodEl.textContent = p.periodLabel;
-
+// Builds the inner HTML for ONE quarter's card — pulled out of renderPersona
+// so that function can just map this over the whole PERSONA[brand] array.
+function personaCardHtml(p) {
   const tickerHtml = p.stats.map(s => `
     <div class="persona-ticker-item">
       <span class="persona-ticker-value">${s.value}</span>
@@ -1881,7 +1970,7 @@ function renderPersona(brand) {
       <ul>${group.items.map(item => `<li>${item}</li>`).join("")}</ul>
     </div>`).join("");
 
-  container.innerHTML = `
+  return `
     <div class="persona-card">
       <span class="persona-tag">${p.periodLabel}</span>
       <div class="persona-head">
@@ -1900,6 +1989,63 @@ function renderPersona(brand) {
         </div>
       </div>
     </div>`;
+}
+
+// Shows/hides the left/right scroll arrows based on actual scroll position —
+// e.g. with only 2 quarters loaded (today), both cards already fit the row
+// and neither arrow has anything to reveal, so both stay hidden. Once a 3rd
+// quarter is unshifted onto the PERSONA array, the right arrow appears on
+// its own with no other code changes needed.
+function updatePersonaArrows(track, leftBtn, rightBtn) {
+  const maxScroll = track.scrollWidth - track.clientWidth;
+  leftBtn.style.display = track.scrollLeft > 8 ? "flex" : "none";
+  rightBtn.style.display = track.scrollLeft < maxScroll - 8 ? "flex" : "none";
+}
+
+function renderPersona(brand) {
+  const quarters = PERSONA[brand];
+  const container = document.getElementById("persona-card");
+  const periodEl = document.getElementById("persona-period");
+  if (!quarters || !quarters.length || !container) return;
+
+  // Oldest-to-newest range for the section-head note (e.g. "Q1 - Q2 2026");
+  // each card also carries its own "Q2 2026" tag, so this is just orienting
+  // context, not duplicated detail.
+  periodEl.textContent = quarters.length > 1
+    ? `${quarters[quarters.length - 1].periodLabel} \u2013 ${quarters[0].periodLabel}`
+    : quarters[0].periodLabel;
+
+  const cardsHtml = quarters.map(personaCardHtml).join("");
+
+  container.innerHTML = `
+    <div class="persona-scroll-wrap">
+      <button class="persona-scroll-arrow persona-scroll-arrow-left" aria-label="Show newer quarter" style="display:none;">&#8592;</button>
+      <div class="persona-scroll-track">${cardsHtml}</div>
+      <button class="persona-scroll-arrow persona-scroll-arrow-right" aria-label="Show older quarter" style="display:none;">&#8594;</button>
+    </div>`;
+
+  const track = container.querySelector(".persona-scroll-track");
+  const leftBtn = container.querySelector(".persona-scroll-arrow-left");
+  const rightBtn = container.querySelector(".persona-scroll-arrow-right");
+
+  // Scrolls by exactly one card's width (+ the gap) per click, so a click
+  // always lands cleanly on the next quarter rather than a partial scroll —
+  // scroll-snap (in CSS) backs this up for trackpad/touch scrolling too.
+  function scrollByOneCard(direction) {
+    const card = track.querySelector(".persona-card");
+    if (!card) return;
+    const gap = parseFloat(getComputedStyle(track).columnGap || getComputedStyle(track).gap || "16");
+    track.scrollBy({ left: direction * (card.offsetWidth + gap), behavior: "smooth" });
+  }
+
+  leftBtn.addEventListener("click", () => scrollByOneCard(-1));
+  rightBtn.addEventListener("click", () => scrollByOneCard(1));
+  track.addEventListener("scroll", () => updatePersonaArrows(track, leftBtn, rightBtn));
+
+  // Run once after layout settles (card widths aren't known until the
+  // browser has actually painted them) so the initial arrow visibility is
+  // correct on first load, not just after the first scroll event.
+  requestAnimationFrame(() => updatePersonaArrows(track, leftBtn, rightBtn));
 }
 
 
