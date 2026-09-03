@@ -3,7 +3,12 @@ name: Daily SEO report update
 on:
   schedule:
     - cron: "30 1 * * *"   # 01:30 UTC = 09:30 GMT+8 every day — edit this to change the time
-  workflow_dispatch: {}     # adds a "Run workflow" button so you can trigger it by hand too
+  workflow_dispatch:        # adds a "Run workflow" button so you can trigger it by hand too
+    inputs:
+      full_refresh:
+        description: "Full refresh (re-fetch every archived month instead of just the recent ones — use after a data/filter change, or before a quarterly persona review)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -24,6 +29,7 @@ jobs:
       - name: Fetch GA4 + Search Console data
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          FULL_REFRESH: ${{ inputs.full_refresh }}
         run: python scripts/fetch_data.py
 
       - name: Commit updated data
