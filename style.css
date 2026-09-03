@@ -523,11 +523,53 @@ section[id], #pages-by-category { scroll-margin-top: 130px; }
    ticker-style stat row instead of boxed KPI tiles. Device/market colors
    reuse the exact palette the Device & Audience donuts use elsewhere
    (accent / secondary / muted) so the two sections read as one language.
+
+   Multiple quarters render as a horizontally scrollable row (see
+   renderPersona()) — two cards fit per screen on desktop, sized via
+   flex-basis below. Arrows only appear once there's something to scroll
+   to (updatePersonaArrows() in app.js), so with just 1-2 quarters loaded
+   the row looks like a plain static grid with no scroll affordance at all.
    --------------------------------------------------------------------- */
+.persona-scroll-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.persona-scroll-track {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+}
+.persona-scroll-track::-webkit-scrollbar { display: none; }
+
+.persona-scroll-arrow {
+  flex-shrink: 0;
+  align-self: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--secondary);
+  font-size: 16px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.persona-scroll-arrow:hover { background: var(--surface); border-color: var(--secondary); }
+
 .persona-card {
   position: relative;
+  flex: 0 0 calc(50% - 10px);
+  scroll-snap-align: start;
+  min-width: 340px;
   border: 1px solid var(--border);
-  border-top: 4px solid var(--accent);
   border-radius: var(--radius-md);
   padding: 30px 34px 26px;
   background: var(--white);
@@ -551,7 +593,7 @@ section[id], #pages-by-category { scroll-margin-top: 130px; }
 }
 
 .persona-archetype {
-  font-family: "Newsreader", Georgia, serif;
+  font-family: inherit;
   font-weight: 600;
   font-size: 27px;
   line-height: 1.25;
@@ -684,7 +726,8 @@ section[id], #pages-by-category { scroll-margin-top: 130px; }
 }
 
 @media (max-width: 700px) {
-  .persona-card { padding: 22px 20px; }
+  .persona-card { padding: 22px 20px; flex-basis: 100%; min-width: 0; }
+  .persona-scroll-arrow { display: none !important; }
   .persona-head { padding-right: 0; }
   .persona-tag { position: static; display: inline-block; margin-bottom: 10px; }
   .persona-archetype { font-size: 22px; }
