@@ -2057,14 +2057,27 @@ function renderPersona(brand) {
   rightBtn.addEventListener("click", () => scrollByOneCard(1));
   track.addEventListener("scroll", () => updatePersonaArrows(track, leftBtn, rightBtn));
 
-  // Run once after layout settles (card widths/heights aren't known until
-  // the browser has actually painted them) — equalize the facts row
-  // heights FIRST (this changes each card's total height), then check
-  // arrow visibility against the now-final layout.
-  requestAnimationFrame(() => {
+  // Measuring on the very next animation frame is NOT enough to guarantee
+  // correct text-wrap measurements: if the custom web font (Noto Sans SC,
+  // loaded via <link> in index.html) hasn't finished downloading yet, the
+  // browser measures with a fallback font's metrics, then swaps to the real
+  // font afterward and re-wraps text to different line counts — but the
+  // height already got set based on the now-stale measurement, so the new
+  // (often taller) content overflows past it instead of the box growing.
+  // document.fonts.ready only resolves once every requested font has
+  // actually loaded and is in use, so measuring there gets real, final
+  // metrics. It resolves near-instantly on repeat renders (fonts already
+  // cached from the page's first load), so this doesn't add a real delay
+  // after the very first paint.
+  const runLayout = () => {
     equalizePersonaFactsHeights(container);
     updatePersonaArrows(track, leftBtn, rightBtn);
-  });
+  };
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(runLayout);
+  } else {
+    requestAnimationFrame(runLayout); // very old browser without the Font Loading API — best effort
+  }
 }
 
 
