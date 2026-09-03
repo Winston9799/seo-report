@@ -2002,6 +2002,21 @@ function updatePersonaArrows(track, leftBtn, rightBtn) {
   rightBtn.style.display = track.scrollLeft < maxScroll - 8 ? "flex" : "none";
 }
 
+// Measures every card's ACTUAL rendered .persona-facts height (after the
+// browser has laid text out and wrapped it) and sets them all to match the
+// tallest one — this is what keeps the ticker/Top markets/Device split rows
+// aligned across cards regardless of how long that quarter's bullet text
+// happens to be, without needing a hand-guessed min-height in CSS (which
+// had to be guessed blind in this environment — no real browser available
+// to verify against — and was wrong twice before this replaced it).
+function equalizePersonaFactsHeights(container) {
+  const factsEls = Array.from(container.querySelectorAll(".persona-facts"));
+  if (factsEls.length < 2) return; // nothing to align with only one card
+  factsEls.forEach(el => { el.style.height = "auto"; }); // reset before measuring
+  const maxHeight = Math.max(...factsEls.map(el => el.offsetHeight));
+  factsEls.forEach(el => { el.style.height = `${maxHeight}px`; });
+}
+
 function renderPersona(brand) {
   const quarters = PERSONA[brand];
   const container = document.getElementById("persona-card");
@@ -2042,10 +2057,14 @@ function renderPersona(brand) {
   rightBtn.addEventListener("click", () => scrollByOneCard(1));
   track.addEventListener("scroll", () => updatePersonaArrows(track, leftBtn, rightBtn));
 
-  // Run once after layout settles (card widths aren't known until the
-  // browser has actually painted them) so the initial arrow visibility is
-  // correct on first load, not just after the first scroll event.
-  requestAnimationFrame(() => updatePersonaArrows(track, leftBtn, rightBtn));
+  // Run once after layout settles (card widths/heights aren't known until
+  // the browser has actually painted them) — equalize the facts row
+  // heights FIRST (this changes each card's total height), then check
+  // arrow visibility against the now-final layout.
+  requestAnimationFrame(() => {
+    equalizePersonaFactsHeights(container);
+    updatePersonaArrows(track, leftBtn, rightBtn);
+  });
 }
 
 
@@ -2196,6 +2215,21 @@ document.getElementById("quarter-current").addEventListener("change", renderAll)
 document.getElementById("quarter-compare").addEventListener("change", renderAll);
 document.getElementById("metric-select").addEventListener("change", renderAll);
 document.getElementById("device-users-metric-select").addEventListener("change", renderAll);
+
+// Text wrapping in the persona facts columns changes with viewport width,
+// which means the equalized heights set by equalizePersonaFactsHeights()
+// go stale on resize (e.g. rotating a tablet, or just resizing the browser
+// window) — reset to auto and re-measure rather than leaving old heights
+// that no longer match the new line-wrap. Debounced so it runs once after
+// resizing stops, not on every intermediate pixel.
+let personaResizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(personaResizeTimer);
+  personaResizeTimer = setTimeout(() => {
+    const container = document.getElementById("persona-card");
+    if (container) equalizePersonaFactsHeights(container);
+  }, 150);
+});
 
 // Kicks everything off on page load.
 renderBrand(currentBrand);
