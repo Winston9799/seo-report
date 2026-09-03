@@ -515,6 +515,187 @@ section[id], #pages-by-category { scroll-margin-top: 130px; }
   .hero-banner { height: 300px; }   /* was 200px — same 1.5x scaling for mobile */
 }
 
+/* ---------------------------------------------------------------------
+   ORGANIC AUDIENCE SNAPSHOT — see renderPersona() in app.js. Treated as a profile
+   dossier rather than another stat-card: a colored top edge (like a
+   boarding-pass stub — this brand does trading tickets, not SaaS panels),
+   a serif headline for the one piece of writing in the report, and a
+   ticker-style stat row instead of boxed KPI tiles. Device/market colors
+   reuse the exact palette the Device & Audience donuts use elsewhere
+   (accent / secondary / muted) so the two sections read as one language.
+   --------------------------------------------------------------------- */
+.persona-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: 30px 34px 26px;
+  background: var(--white);
+}
+
+.persona-tag {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 12px;
+}
+
+.persona-head {
+  margin-bottom: 14px;
+  padding-right: 90px;
+}
+
+.persona-archetype {
+  font-family: "Newsreader", Georgia, serif;
+  font-weight: 600;
+  font-size: 27px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.persona-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 24px;
+}
+
+.persona-facts-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.persona-facts ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.persona-facts li {
+  position: relative;
+  padding-left: 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--secondary);
+  margin-bottom: 7px;
+}
+.persona-facts li:last-child { margin-bottom: 0; }
+.persona-facts li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.persona-ticker {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 26px;
+}
+
+.persona-ticker-item {
+  padding: 14px 18px;
+  border-right: 1px solid var(--border);
+}
+.persona-ticker-item:first-child { padding-left: 0; }
+.persona-ticker-item:last-child { border-right: none; }
+
+.persona-ticker-value {
+  display: block;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.persona-ticker-label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.persona-visuals {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 40px;
+  align-items: start;
+}
+
+.persona-visual-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 12px;
+}
+
+/* Top markets — one segmented strip instead of five repeated bars */
+.persona-strip {
+  display: flex;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.persona-strip-seg { height: 100%; }
+
+.persona-strip-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12.5px;
+  color: var(--secondary);
+}
+
+.persona-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+}
+
+/* Device mix — small SVG ring chart, same visual language as the
+   Device & Audience donuts further down the report */
+.persona-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.persona-donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--secondary);
+}
+
+@media (max-width: 700px) {
+  .persona-card { padding: 22px 20px; }
+  .persona-head { padding-right: 0; }
+  .persona-tag { position: static; display: inline-block; margin-bottom: 10px; }
+  .persona-archetype { font-size: 22px; }
+  .persona-facts { grid-template-columns: 1fr; gap: 18px; }
+  .persona-ticker { grid-template-columns: repeat(2, 1fr); }
+  .persona-ticker-item:nth-child(2) { border-right: none; }
+  .persona-ticker-item:nth-child(3) { padding-left: 0; border-top: 1px solid var(--border); padding-top: 14px; }
+  .persona-ticker-item:nth-child(4) { border-top: 1px solid var(--border); padding-top: 14px; }
+  .persona-visuals { grid-template-columns: 1fr; gap: 26px; }
+}
+
 .report-notes {
   margin-top: 20px;
   padding: 14px 18px;
@@ -573,6 +754,13 @@ section[id], #pages-by-category { scroll-margin-top: 130px; }
    The tiles in the Executive Summary section (Total clicks, Total
    impressions, etc.) — built by kpiCard() in app.js.
    ============================================================ */
+
+.kpi-row-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
 
 .kpi-row {
   display: grid;

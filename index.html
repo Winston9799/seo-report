@@ -12,7 +12,7 @@
      via /font/... — this only kicks in if those aren't present. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet">
 
 <!-- Charting library used only by the Trend chart (app.js) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -115,6 +115,7 @@
      configured (Anzo, not DLSM).
      ================================================================ -->
 <nav class="side-nav" id="side-nav">
+  <a href="#section-persona">Audience Snapshot</a>
   <a href="#section-trend">Trend</a>
   <a href="#section-summary">Executive Summary</a>
   <a href="#section-page-titles">Page Title &amp; Screen</a>
@@ -164,6 +165,22 @@
   </div>
 
   <!-- ================================================================
+       ORGANIC AUDIENCE SNAPSHOT — a hand-curated summary of who's actually finding
+       this brand through organic search, refreshed quarterly (NOT tied to
+       the Compare-by date pickers above — see PERSONA config in app.js).
+       Rebuilt by hand each quarter from the Quarter view's own numbers;
+       update the PERSONA object in app.js when it's time to refresh.
+       Filled in by renderPersona() in app.js.
+       ================================================================ -->
+  <section id="section-persona">
+    <div class="section-head">
+      <h2>Organic audience snapshot</h2>
+      <span class="section-note" id="persona-period"></span>
+    </div>
+    <div id="persona-card"></div>
+  </section>
+
+  <!-- ================================================================
        TREND CHART
        Always plots full months of daily data (see renderTrendChart in
        app.js for why it doesn't try to show a single day's "trend").
@@ -172,6 +189,7 @@
   <section id="section-trend">
     <div class="section-head">
       <h2>Trend</h2>
+      <span class="section-note" id="trend-source-tag"></span>
       <select id="metric-select" class="month-picker-inline">
         <option value="clicks">Clicks</option>
         <option value="impressions">Impressions</option>
@@ -194,8 +212,10 @@
       <h2>Executive summary</h2>
       <span class="section-note" id="period-note"></span>
     </div>
+    <div class="kpi-row-label">Search Console (GSC)</div>
     <div class="kpi-row" id="kpi-row"></div>
-    <div class="kpi-row" id="kpi-row-ga4" style="margin-top:16px;"></div>
+    <div class="kpi-row-label" style="margin-top:16px;">Google Analytics (GA4) — organic search sessions only</div>
+    <div class="kpi-row" id="kpi-row-ga4"></div>
   </section>
 
   <!-- ================================================================
@@ -205,7 +225,7 @@
        ================================================================ -->
   <section id="section-page-titles">
     <div class="section-head">
-      <h2>Page title and screen (Organic)</h2>
+      <h2>Page title and screen (Organic, GA4)</h2>
       <span class="section-note">Views and key events by page title</span>
     </div>
     <div id="page-titles-table"></div>
@@ -213,7 +233,7 @@
 
   <section id="section-key-events">
     <div class="section-head">
-      <h2>Key events by event name (Organic)</h2>
+      <h2>Key events by event name (Organic, GA4)</h2>
     </div>
     <div id="key-events-table"></div>
   </section>
@@ -227,7 +247,7 @@
        ================================================================ -->
   <section id="funnel-wrapper">
     <div class="section-head">
-      <h2>Conversion funnel (Organic)</h2>
+      <h2>Conversion funnel (Organic, GA4)</h2>
       <span class="section-note">Event counts, % of top-of-funnel, and drop-off between stages</span>
     </div>
     <div id="funnel-container"></div>
@@ -240,7 +260,7 @@
        ================================================================ -->
   <section id="section-visibility">
     <div class="section-head">
-      <h2>Visibility distribution</h2>
+      <h2>Visibility distribution (GSC)</h2>
       <span class="section-note" id="distribution-note"></span>
     </div>
     <div id="position-distribution"></div>
@@ -253,7 +273,7 @@
        ================================================================ -->
   <section id="section-ctr">
     <div class="section-head">
-      <h2>CTR opportunities</h2>
+      <h2>CTR opportunities (GSC)</h2>
       <span class="section-note">Queries getting fewer clicks than typical for their position</span>
     </div>
     <div id="ctr-opportunities-table"></div>
@@ -266,7 +286,7 @@
        ================================================================ -->
   <section id="section-movers">
     <div class="section-head">
-      <h2>Top keyword movers</h2>
+      <h2>Top keyword movers (GSC)</h2>
       <span class="section-note">Search or sort — click a column header</span>
     </div>
     <div id="movers-table"></div>
@@ -280,7 +300,7 @@
        ================================================================ -->
   <section id="section-branded-split">
     <div class="section-head">
-      <h2>Branded vs. non-branded</h2>
+      <h2>Branded vs. non-branded (GSC)</h2>
       <span class="section-note">Share of total clicks</span>
     </div>
     <div id="split-section"></div>
@@ -293,11 +313,11 @@
   <section id="section-branded-keywords">
     <div class="two-col">
       <div>
-        <div class="section-head"><h2>Branded keywords</h2></div>
+        <div class="section-head"><h2>Branded keywords (GSC)</h2></div>
         <div id="branded-table"></div>
       </div>
       <div>
-        <div class="section-head"><h2>Non-branded keywords</h2></div>
+        <div class="section-head"><h2>Non-branded keywords (GSC)</h2></div>
         <div id="nonbranded-table"></div>
       </div>
     </div>
@@ -319,7 +339,7 @@
        renderCountryCharts() and renderCountries().
        ================================================================ -->
   <section id="section-countries">
-    <div class="section-head"><h2>Top countries</h2></div>
+    <div class="section-head"><h2>Top countries (GSC)</h2></div>
     <div class="two-col">
       <div>
         <div class="section-note" style="margin-bottom:8px;">Top 10 by impressions</div>
@@ -354,7 +374,7 @@
     <div class="three-col">
       <div>
         <div class="donut-card-head">
-          Device (Organic)
+          Device (Organic, GA4)
           <select id="device-users-metric-select" class="month-picker-inline mini">
             <option value="activeUsers">Active</option>
             <option value="newUsers">New</option>
@@ -367,7 +387,7 @@
         </div>
       </div>
       <div>
-        <div class="donut-card-head">OS (Organic)</div>
+        <div class="donut-card-head">OS (Organic, GA4)</div>
         <div class="donut-card">
           <canvas id="os-chart" height="200"></canvas>
           <div class="donut-legend" id="os-legend"></div>
