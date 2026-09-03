@@ -47,7 +47,7 @@ BRANDS = [
         "color": "#b22333",
         "ga4_property_id": "480686179",
         "gsc_site_url": "sc-domain:anzocapital.com",
-        "brand_keywords": ["anzo", "昂首资本"],   # any query containing either = branded. "anzo" was "anzo capital" (widened — bare "anzo" was 304 clicks/quarter falling into non-branded). "昂首资本" is Anzo Capital's Chinese name — was missing entirely, so Chinese-script brand searches were being counted as non-branded.
+        "brand_keywords": ["anzo", "昂首资本", "안조캐피탈"],   # any query containing any of these = branded. "anzo" was "anzo capital" (widened — bare "anzo" was 304 clicks/quarter falling into non-branded). "昂首资本" is Anzo Capital's Chinese name, "안조캐피탈" is the Korean transliteration — both were missing, so non-Latin-script brand searches were being counted as non-branded.
         # These subdomains (portal login, file server) aren't real content —
         # excluded from every GSC row server-side, and every GA4 row by hostname,
         # before any total/keyword/page/country/device number is calculated.
