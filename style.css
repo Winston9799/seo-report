@@ -605,6 +605,10 @@ section[id], #pages-by-category { scroll-margin-top: 130px; }
   grid-template-columns: 1fr 1fr;
   gap: 32px;
   margin-bottom: 24px;
+  overflow: hidden; /* safety net: if the JS-set height is ever wrong (e.g. a
+    future font-loading edge case), content clips cleanly here instead of
+    visually overlapping the ticker row below it — a truncated line reads as
+    "needs a fix" where overlapping text reads as "the page is broken". */
   /* No min-height here on purpose — see equalizePersonaFactsHeights() in
      app.js. A fixed px guess kept being wrong without a real browser to
      verify against (190px, then 230px, still off). JS measures each card's
