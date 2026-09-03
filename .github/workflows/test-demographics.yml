@@ -1,0 +1,29 @@
+name: Test demographics (one-off)
+
+# Manual trigger only — no schedule. Diagnostic only: reads GA4, writes
+# nothing, never touches data/*.json or the live report. Safe to run
+# any time; delete this workflow once you've got your answer if you'd
+# rather not keep it around.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  test-demographics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Test GA4 age/gender data
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: python scripts/test_demographics.py
