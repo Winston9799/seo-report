@@ -1706,6 +1706,25 @@ const HERO_MEDIA = {
   dlsm: { video: "media/dlsm-hero.mp4", image: "media/dlsm-hero.jpg" },
 };
 
+// Wording for the "Data scope" note in #note-scope — kept in sync BY HAND
+// with the actual exclusions each brand has in fetch_data.py's BRANDS
+// config. Both brands drop China/Hong Kong/Macao/Taiwan (EXCLUDE_GA4/GSC_
+// COUNTRIES, applied globally); only Anzo additionally drops its portal/
+// downloads subdomains (exclude_page_regex / exclude_ga4_hostnames), since
+// DLSM has no equivalent subdomains configured. If that ever changes on
+// the Python side, update the matching brand's string here too.
+const DATA_SCOPE_NOTES = {
+  anzo: 'figures exclude traffic from China, Hong Kong, Macao &amp; Taiwan, and from the client portal / downloads subdomains (my.anzocapital.com, files.anzocapital.com) — so totals will run lower than raw GA4 or Search Console for the same period. This is intentional, not a tracking gap.',
+  dlsm: 'figures exclude traffic from China, Hong Kong, Macao &amp; Taiwan — so totals will run lower than raw GA4 or Search Console for the same period. This is intentional, not a tracking gap.',
+};
+
+function renderReportNotes(brand) {
+  const el = document.getElementById("note-scope");
+  if (!el) return;
+  const note = DATA_SCOPE_NOTES[brand] || DATA_SCOPE_NOTES.anzo;
+  el.innerHTML = `<strong>Data scope:</strong> ${note}`;
+}
+
 // Tries video, falls back to image on error, falls back to hiding the
 // section entirely if the image ALSO errors (or was never configured) —
 // so every combination in HERO_MEDIA "just works" without needing to know
@@ -1755,6 +1774,7 @@ function renderHero(brand) {
 // match, rebuilds all three sets of dropdowns, and triggers the first render.
 async function renderBrand(brand) {
   renderHero(brand); // updates immediately, independent of whether the report data below loads successfully
+  renderReportNotes(brand); // same idea — swaps the Data scope wording for this brand's actual exclusions
 
   const data = await loadBrand(brand);
   if (!data || !data.months || data.months.length === 0) {

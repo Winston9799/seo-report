@@ -145,14 +145,22 @@
   </section>
 
   <!-- ================================================================
-       ROW-HIGHLIGHT LEGEND — explains the green/orange tinted rows that
-       appear throughout every keyword/page/country table in this report
-       (see swingRowClass() in app.js). Shown once, here, rather than
-       repeated above each individual table.
+       REPORT NOTES — two things worth knowing before reading the numbers
+       below: (1) this report is filtered organic data, not a raw GA4/GSC
+       export, so it won't match those tools' totals — see exclude_regions
+       / exclude_page_regex / exclude_ga4_hostnames in fetch_data.py for
+       the actual filters; (2) what the green/orange row tints mean
+       throughout every keyword/page/country table (see swingRowClass()
+       in app.js). Shown once, here, rather than repeated per section.
        ================================================================ -->
-  <div class="highlight-legend">
-    <span><span class="swatch-demo swatch-demo-up"></span> Green row — clicks increased 50%+ vs. the other selected period</span>
-    <span><span class="swatch-demo swatch-demo-down"></span> Orange row — clicks decreased 50%+ vs. the other selected period</span>
+  <div class="report-notes">
+    <div class="note-scope" id="note-scope">
+      <strong>Data scope:</strong> figures exclude traffic from China, Hong Kong, Macao &amp; Taiwan, and from the client portal / downloads subdomains (my.anzocapital.com, files.anzocapital.com) — so totals will run lower than raw GA4 or Search Console for the same period. This is intentional, not a tracking gap.
+    </div>
+    <div class="highlight-legend">
+      <span><span class="swatch-demo swatch-demo-up"></span> Green row — clicks increased 50%+ vs. the other selected period</span>
+      <span><span class="swatch-demo swatch-demo-down"></span> Orange row — clicks decreased 50%+ vs. the other selected period</span>
+    </div>
   </div>
 
   <!-- ================================================================
