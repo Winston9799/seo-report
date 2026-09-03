@@ -736,6 +736,7 @@ function fmtShortDate(iso) {
 
 function renderTrendChart(currSeries, currLabel, compSeries, compLabel) {
   const metric = document.getElementById("metric-select").value;
+  document.getElementById("trend-source-tag").textContent = metric === "sessions" ? "(GA4, organic)" : "(GSC)";
   const maxDays = Math.max(currSeries.length, compSeries.length, 1);
 
   // The x-axis shows the CURRENT period's actual calendar dates (e.g.
@@ -1384,7 +1385,7 @@ function renderPagesByCategory(curr, comp) {
 
     const section = document.createElement("section");
     section.innerHTML = `
-      <div class="section-head"><h2>Pages — ${group.label}</h2></div>
+      <div class="section-head"><h2>Pages — ${group.label} (GSC)</h2></div>
       <div class="two-col">
         <div>
           <div class="section-note" style="margin-bottom:8px;">By impressions</div>
@@ -1701,6 +1702,207 @@ function populateQuarterPickers() {
 // section if NEITHER exists. Set video (or image) to null/omit it entirely
 // for a brand that doesn't have one yet — the fallback chain below handles
 // every combination (video-only, image-only, both, or neither) the same way.
+// ---------------------------------------------------------------------------
+// ORGANIC AUDIENCE SNAPSHOT — hand-curated, NOT auto-computed from the live date
+// pickers above. Refresh this by hand each quarter (see the "update persona
+// every quarter" workflow): pull the Quarter view's own numbers for the new
+// quarter, rewrite the narrative/stats/bars/funnel below, done. Keeping this
+// separate from the live report means a persona can say something an
+// algorithm can't ("the funnel went quiet in April/May") without trying to
+// auto-generate prose from raw numbers.
+//
+// DON'T add GA4 age/gender (userAgeBracket / userGender) here — tested via
+// scripts/test_demographics.py on real Aug 2026 data and confirmed unusable:
+// 73-81% of organic-channel users come back as "unknown" for both brands
+// (GA4 returns the literal string "unknown" for these two dimensions when
+// Google Signals has no confident match, not "(not set)" like most other
+// dimensions). The ~20-27% that DO have a known bracket aren't a random
+// sample either — they're specifically people signed into Google with ad
+// personalization on, which skews the picture rather than representing the
+// real audience. Same failure mode that got Interests/brandingInterest
+// removed earlier. If this ever gets re-tested (e.g. after enabling Google
+// Signals differently, or traffic volume grows a lot), re-run that script
+// first rather than trusting the numbers on faith.
+// ---------------------------------------------------------------------------
+const PERSONA = {
+  anzo: {
+    periodLabel: "Q2 2026",
+    archetype: "The brand-aware trader, arriving on mobile",
+    facts: [
+      {
+        label: "Who they are",
+        items: [
+          "A brand-aware trader already searching for Anzo by name, mostly from Nigeria, Kenya, or Malaysia",
+          "Finds the site on a mobile phone far more often than desktop",
+        ],
+      },
+      {
+        label: "This quarter",
+        items: [
+          "Two-thirds of visitors were brand new to the site",
+          "The organic funnel went quiet — just 2 first-time deposits across three months, before rebounding into July and August",
+        ],
+      },
+    ],
+    stats: [
+      { value: "91.0%", label: "Branded search (GSC)" },
+      { value: "64%", label: "Mobile search clicks (GSC)" },
+      { value: "71%", label: "Engaged sessions (GA4)" },
+      { value: "65%", label: "New visitors (GA4)" },
+    ],
+    friction: [
+      "USA ranks pos. 12.9 across 26,596 impressions but converts just 0.7% — a lot of visibility, very few clicks.",
+      "The MT5 price-alert blog post ranks well (pos. 7.2) yet earns only a 1.6% CTR — the searcher's question likely isn't answered in the title/snippet.",
+    ], // not currently rendered — see renderPersona(), dropped from the card by request
+    countries: [
+      { label: "Nigeria", pct: 35.3 },
+      { label: "Kenya", pct: 11.5 },
+      { label: "Malaysia", pct: 9.9 },
+      { label: "USA", pct: 7.1 },
+      { label: "Philippines", pct: 5.3 },
+    ],
+    devices: [
+      { label: "Mobile", pct: 64.4 },
+      { label: "Desktop", pct: 34.3 },
+      { label: "Tablet", pct: 1.3 },
+    ],
+    funnel: [
+      { label: "Leads", count: 1 },
+      { label: "Registered", count: 3 },
+      { label: "Approved", count: 2 },
+      { label: "Funded", count: 2 },
+    ], // not currently rendered — see renderPersona(), dropped from the card by request
+  },
+  dlsm: {
+    periodLabel: "Q2 2026",
+    archetype: "The near-total brand searcher",
+    facts: [
+      {
+        label: "Who they are",
+        items: [
+          "Already knows the DLSM name and searches for it directly — arriving from Malaysia, Australia, or Indonesia",
+          "Splits close to evenly between mobile and desktop",
+        ],
+      },
+      {
+        label: "This quarter",
+        items: [
+          "Essentially no organic \"discovery\" happening — non-branded search barely registers",
+          "Most non-brand queries that do appear are just brand-name typos, not real topical interest",
+        ],
+      },
+    ],
+    stats: [
+      { value: "99.1%", label: "Branded search (GSC)" },
+      { value: "56%", label: "Mobile search clicks (GSC)" },
+      { value: "77%", label: "Engaged sessions (GA4)" },
+      { value: "56%", label: "New visitors (GA4)" },
+    ],
+    friction: [
+      "Pakistan ranks pos. 3.9 — a strong result — but converts only 3.4% of 2,426 impressions.",
+      "The meta-trader page ranks pos. 1.9, close to the top spot, yet earns just 0.5% CTR.",
+    ], // not currently rendered — see renderPersona(), dropped from the card by request
+    countries: [
+      { label: "Malaysia", pct: 27.3 },
+      { label: "Australia", pct: 13.0 },
+      { label: "Indonesia", pct: 9.8 },
+      { label: "USA", pct: 9.8 },
+      { label: "Japan", pct: 7.5 },
+    ],
+    devices: [
+      { label: "Mobile", pct: 55.9 },
+      { label: "Desktop", pct: 43.3 },
+      { label: "Tablet", pct: 0.8 },
+    ],
+    funnel: null, // no conversion funnel configured for DLSM — see funnel_stages in fetch_data.py
+  },
+};
+
+// Same six-tone sequence the Device & Audience donuts use elsewhere in the
+// report (see the `palette` const near renderDeviceCharts) — reused here so
+// the persona's market strip and device ring read as the same visual
+// language as the rest of the report, not a one-off.
+function personaPalette() {
+  return [cssVar("--accent"), cssVar("--secondary"), cssVar("--muted"), cssVar("--positive"), cssVar("--border")];
+}
+
+// Segmented single-strip bar for Top markets — one strip instead of five
+// repeated progress bars, colored from personaPalette() in rank order.
+function personaMarketStrip(countries) {
+  const palette = personaPalette();
+  const segs = countries.map((c, i) =>
+    `<span class="persona-strip-seg" style="width:${c.pct}%;background:${palette[i % palette.length]}"></span>`
+  ).join("");
+  const legend = countries.map((c, i) => `
+    <span><span class="persona-legend-dot" style="background:${palette[i % palette.length]}"></span>${c.label} ${c.pct}%</span>
+  `).join("");
+  return `<div class="persona-strip">${segs}</div><div class="persona-strip-legend">${legend}</div>`;
+}
+
+// Small SVG ring chart for device split — same donut construction the
+// Device & Audience charts use conceptually (stacked stroke-dasharray
+// arcs), just hand-drawn here since this card isn't chart.js-driven.
+function personaDeviceDonut(devices) {
+  const palette = personaPalette();
+  const r = 15.9155, circ = 2 * Math.PI * r;
+  let offset = 0;
+  const arcs = devices.map((d, i) => {
+    const dash = (d.pct / 100) * circ;
+    const circle = `<circle cx="21" cy="21" r="${r}" fill="none" stroke="${palette[i % palette.length]}" stroke-width="5" stroke-dasharray="${dash} ${circ - dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 21 21)"/>`;
+    offset += dash;
+    return circle;
+  }).join("");
+  const legend = devices.map((d, i) => `
+    <span><span class="persona-legend-dot" style="background:${palette[i % palette.length]}"></span>${d.label} ${d.pct}%</span>
+  `).join("");
+  return `
+    <div class="persona-donut-wrap">
+      <svg width="60" height="60" viewBox="0 0 42 42">${arcs}</svg>
+      <div class="persona-donut-legend">${legend}</div>
+    </div>`;
+}
+
+function renderPersona(brand) {
+  const p = PERSONA[brand];
+  const container = document.getElementById("persona-card");
+  const periodEl = document.getElementById("persona-period");
+  if (!p || !container) return;
+  periodEl.textContent = p.periodLabel;
+
+  const tickerHtml = p.stats.map(s => `
+    <div class="persona-ticker-item">
+      <span class="persona-ticker-value">${s.value}</span>
+      <span class="persona-ticker-label">${s.label}</span>
+    </div>`).join("");
+
+  const factsHtml = (p.facts || []).map(group => `
+    <div>
+      <div class="persona-facts-label">${group.label}</div>
+      <ul>${group.items.map(item => `<li>${item}</li>`).join("")}</ul>
+    </div>`).join("");
+
+  container.innerHTML = `
+    <div class="persona-card">
+      <span class="persona-tag">${p.periodLabel}</span>
+      <div class="persona-head">
+        <h3 class="persona-archetype">${p.archetype}</h3>
+      </div>
+      <div class="persona-facts">${factsHtml}</div>
+      <div class="persona-ticker">${tickerHtml}</div>
+      <div class="persona-visuals">
+        <div>
+          <div class="persona-visual-title">Top markets (GSC)</div>
+          ${personaMarketStrip(p.countries)}
+        </div>
+        <div>
+          <div class="persona-visual-title">Device split (GSC)</div>
+          ${personaDeviceDonut(p.devices)}
+        </div>
+      </div>
+    </div>`;
+}
+
+
 const HERO_MEDIA = {
   anzo: { video: "media/anzo-hero.mp4", image: "media/anzo-hero.jpg" },
   dlsm: { video: "media/dlsm-hero.mp4", image: "media/dlsm-hero.jpg" },
@@ -1775,6 +1977,7 @@ function renderHero(brand) {
 async function renderBrand(brand) {
   renderHero(brand); // updates immediately, independent of whether the report data below loads successfully
   renderReportNotes(brand); // same idea — swaps the Data scope wording for this brand's actual exclusions
+  renderPersona(brand); // hand-curated quarterly persona card — see PERSONA config above
 
   const data = await loadBrand(brand);
   if (!data || !data.months || data.months.length === 0) {
