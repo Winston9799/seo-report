@@ -63,6 +63,12 @@ BRANDS = [
         "ga4_property_id": "474006416",
         "gsc_site_url": "sc-domain:dlsm.com",
         "brand_keywords": ["dlsm"],
+        # DLSM conversion funnel — exact GA4 event names, case-sensitive.
+        # These events were only wired up starting 2026-09-01; any month
+        # before that will correctly show 0 for every stage (see
+        # event_count_lookup.get(name, 0) in build_month_snapshot below) —
+        # that's real, not a bug, so don't be alarmed by zeros in Jul/Aug 2026.
+        "funnel_stages": ["CRM_Reg_Start", "CRM_Reg_Finish", "CRM_Verified", "CRM_FTD"],
     },
 ]
 
@@ -403,6 +409,44 @@ def ga4_daily_totals(client, property_id, start, end, exclude_hostnames=None):
     return by_date
 
 
+def ga4_daily_breakdown(client, property_id, start, end, dimension_name, metric_names, exclude_hostnames=None):
+    """Like ga4_breakdown() above, but broken out by day as well — e.g. gives
+    per-day eventName counts instead of one whole-period total. Currently
+    only used to power the Day-mode version of Key Events (see the
+    daily_detail block in build_month_snapshot); page_titles/
+    operating_systems/device_users remain monthly-only breakdowns, same as
+    before. Same organic-only, excluded-country/hostname filtering as every
+    other GA4 pull in this file. Returns
+    {iso_date: [{"label": ..., <metric1>: ..., <metric2>: ...}, ...]}."""
+    exclude_hostnames = exclude_hostnames or []
+    request = RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start.isoformat(), end_date=end.isoformat())],
+        dimensions=[
+            Dimension(name="date"), Dimension(name=dimension_name),
+            Dimension(name="country"), Dimension(name="hostName"), Dimension(name="sessionDefaultChannelGroup"),
+        ],
+        metrics=[Metric(name=m) for m in metric_names],
+    )
+    resp = client.run_report(request)
+    by_date = {}
+    for row in resp.rows:
+        if row.dimension_values[2].value in EXCLUDE_GA4_COUNTRIES:
+            continue
+        if row.dimension_values[3].value in exclude_hostnames:
+            continue
+        if row.dimension_values[4].value != GA4_ORGANIC_CHANNEL:
+            continue
+        raw_d = row.dimension_values[0].value  # GA4 returns "YYYYMMDD"
+        iso_d = f"{raw_d[0:4]}-{raw_d[4:6]}-{raw_d[6:8]}"  # reformat to match GSC's date format
+        key = row.dimension_values[1].value
+        day_totals = by_date.setdefault(iso_d, {})
+        entry = day_totals.setdefault(key, {"label": key, **{m: 0 for m in metric_names}})
+        for i, m in enumerate(metric_names):
+            entry[m] += int(row.metric_values[i].value)
+    return {d: list(vals.values()) for d, vals in by_date.items()}
+
+
 # ---------------------------------------------------------------------------
 # Per-month snapshot
 # ---------------------------------------------------------------------------
@@ -493,9 +537,21 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
         daily_countries = group_by_date_then(qc, "country", TOP_N_DAILY_COUNTRIES)
         daily_devices = group_by_date_then(dc, "device", 10)
 
-        # Union of every date that shows up in any of the five breakdowns above
+        # Key Events, per day — the one GA4 breakdown that DOES get a Day-mode
+        # version (unlike page_titles/operating_systems/device_users, which
+        # stay monthly-only). Same eventCount-vs-keyEvents distinction as the
+        # monthly key_events_by_name below: only events GA4 has flagged as a
+        # "key event" are kept (keyEvents > 0).
+        daily_key_events_raw = ga4_daily_breakdown(
+            ga4_client, brand["ga4_property_id"], start, end, "eventName",
+            ["eventCount", "keyEvents"], exclude_hostnames=exclude_ga4_hostnames,
+        )
+        daily_key_events = {d: [r for r in rows if r["keyEvents"] > 0] for d, rows in daily_key_events_raw.items()}
+
+        # Union of every date that shows up in any of the six breakdowns above
         # (a date might have branded-keyword data but no device data that day, etc.)
-        all_dates = set(daily_branded) | set(daily_nonbranded) | set(daily_pages) | set(daily_countries) | set(daily_devices)
+        all_dates = (set(daily_branded) | set(daily_nonbranded) | set(daily_pages) |
+                     set(daily_countries) | set(daily_devices) | set(daily_key_events))
         daily_detail = {}
         for d in all_dates:
             daily_detail[d] = {
@@ -504,6 +560,7 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
                 "pages": daily_pages.get(d, []),
                 "countries": daily_countries.get(d, []),
                 "devices": daily_devices.get(d, []),
+                "key_events_by_name": daily_key_events.get(d, []),
             }
 
     ga4 = ga4_totals(ga4_client, brand["ga4_property_id"], start, end, exclude_hostnames=exclude_ga4_hostnames)
