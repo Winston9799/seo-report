@@ -409,14 +409,18 @@ def ga4_daily_totals(client, property_id, start, end, exclude_hostnames=None):
     return by_date
 
 
-def ga4_daily_breakdown(client, property_id, start, end, dimension_name, metric_names, exclude_hostnames=None):
+def ga4_daily_breakdown(client, property_id, start, end, dimension_name, metric_names, exclude_hostnames=None, top_n=None, sort_metric=None):
     """Like ga4_breakdown() above, but broken out by day as well — e.g. gives
-    per-day eventName counts instead of one whole-period total. Currently
-    only used to power the Day-mode version of Key Events (see the
-    daily_detail block in build_month_snapshot); page_titles/
-    operating_systems/device_users remain monthly-only breakdowns, same as
-    before. Same organic-only, excluded-country/hostname filtering as every
-    other GA4 pull in this file. Returns
+    per-day eventName/pageTitle/deviceCategory/operatingSystem counts instead
+    of one whole-period total. Powers the Day-mode version of Key Events,
+    Conversion Funnel, Page Title & Screen, Operating System, and Device
+    Category — all four of fetch_data.py's GA4 breakdowns now have a daily
+    equivalent via this one function. Same organic-only, excluded-country/
+    hostname filtering as every other GA4 pull in this file.
+    top_n/sort_metric work like in ga4_breakdown() — applied PER DAY (each
+    day gets its own top N, not a top N across the whole date range) — and
+    are optional since Key Events/Funnel don't need a cap (event-name
+    cardinality is naturally small). Returns
     {iso_date: [{"label": ..., <metric1>: ..., <metric2>: ...}, ...]}."""
     exclude_hostnames = exclude_hostnames or []
     request = RunReportRequest(
@@ -444,7 +448,14 @@ def ga4_daily_breakdown(client, property_id, start, end, dimension_name, metric_
         entry = day_totals.setdefault(key, {"label": key, **{m: 0 for m in metric_names}})
         for i, m in enumerate(metric_names):
             entry[m] += int(row.metric_values[i].value)
-    return {d: list(vals.values()) for d, vals in by_date.items()}
+    result = {}
+    for d, vals in by_date.items():
+        rows = list(vals.values())
+        if top_n is not None:
+            rows.sort(key=lambda r: r[sort_metric or metric_names[-1]], reverse=True)
+            rows = rows[:top_n]
+        result[d] = rows
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -538,12 +549,13 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
         daily_countries = group_by_date_then(qc, "country", TOP_N_DAILY_COUNTRIES)
         daily_devices = group_by_date_then(dc, "device", 10)
 
-        # Key Events (and, below, the Conversion Funnel) per day — the one
-        # GA4 breakdown that DOES get a Day-mode version (unlike
-        # page_titles/operating_systems/device_users, which stay
-        # monthly-only). key_events_by_name keeps only events GA4 has
-        # flagged as a "key event" (keyEvents > 0), same distinction as the
-        # monthly version below.
+        # Key Events, per day (Conversion Funnel below reuses this same
+        # pull). key_events_by_name keeps only events GA4 has flagged as a
+        # "key event" (keyEvents > 0), same distinction as the monthly
+        # version below. All four of fetch_data.py's GA4 breakdowns
+        # (Key Events, Page Title & Screen, Operating System, Device
+        # Category) now get a Day-mode version — see the three calls below
+        # this one.
         daily_key_events_raw = ga4_daily_breakdown(
             ga4_client, brand["ga4_property_id"], start, end, "eventName",
             ["eventCount", "keyEvents"], exclude_hostnames=exclude_ga4_hostnames,
@@ -561,10 +573,30 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
                 event_count_lookup = {r["label"]: r["eventCount"] for r in rows}
                 daily_funnel[d] = [{"stage": name, "count": event_count_lookup.get(name, 0)} for name in funnel_stage_names]
 
-        # Union of every date that shows up in any of the six breakdowns above
+        # Page Title & Screen, Operating System, and Device Category, per day.
+        # Same three GA4 breakdowns build_month_snapshot already computes at
+        # the monthly level below (page_titles/operating_systems/
+        # device_users) — mirrored here per day so Day mode can show them
+        # too. Same top_n/sort_metric as their monthly counterparts, just
+        # applied within each individual day instead of the whole month.
+        daily_page_titles = ga4_daily_breakdown(
+            ga4_client, brand["ga4_property_id"], start, end, "pageTitle",
+            ["screenPageViews", "keyEvents"], exclude_hostnames=exclude_ga4_hostnames, top_n=30, sort_metric="screenPageViews",
+        )
+        daily_operating_systems = ga4_daily_breakdown(
+            ga4_client, brand["ga4_property_id"], start, end, "operatingSystem",
+            ["activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10,
+        )
+        daily_device_users = ga4_daily_breakdown(
+            ga4_client, brand["ga4_property_id"], start, end, "deviceCategory",
+            ["newUsers", "activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10,
+        )
+
+        # Union of every date that shows up in any of the nine breakdowns above
         # (a date might have branded-keyword data but no device data that day, etc.)
         all_dates = (set(daily_branded) | set(daily_nonbranded) | set(daily_pages) |
-                     set(daily_countries) | set(daily_devices) | set(daily_key_events))
+                     set(daily_countries) | set(daily_devices) | set(daily_key_events) |
+                     set(daily_page_titles) | set(daily_operating_systems) | set(daily_device_users))
         daily_detail = {}
         for d in all_dates:
             daily_detail[d] = {
@@ -575,6 +607,9 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
                 "devices": daily_devices.get(d, []),
                 "key_events_by_name": daily_key_events.get(d, []),
                 "funnel": daily_funnel.get(d, []),
+                "page_titles": daily_page_titles.get(d, []),
+                "operating_systems": daily_operating_systems.get(d, []),
+                "device_users": daily_device_users.get(d, []),
             }
 
     ga4 = ga4_totals(ga4_client, brand["ga4_property_id"], start, end, exclude_hostnames=exclude_ga4_hostnames)
