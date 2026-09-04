@@ -386,6 +386,15 @@ function buildDaySnapshot(dateStr) {
     pages: detail.pages,
     countries: detail.countries,
     devices: detail.devices,
+    // Deliberately NOT defaulted to [] — stays undefined for a day whose
+    // archived detail predates this field (same "not backfilled yet" signal
+    // unavailableMessage() already relies on), and becomes a real array
+    // (possibly empty) once fetch_data.py has recomputed it. Unlike
+    // page_titles/operating_systems/device_users, this one self-heals within
+    // a day of shipping — it's built inside the same daily_detail block that
+    // already gets refetched every day for the whole DAILY_DETAIL_MONTHS
+    // window, no full_refresh required.
+    key_events_by_name: detail.key_events_by_name,
     ga4: {
       sessions: dayTotals.sessions,
       engagedSessions: dayTotals.engagedSessions,
@@ -1116,27 +1125,35 @@ function drawDonutChart(existingChart, canvasId, legendId, rows, metricKey, labe
 // Device Category supports a New Users / Active Users toggle (the <select>
 // next to its heading); Operating System only ever shows Active Users,
 // matching what was asked for.
-// device_users/operating_systems/page_titles/key_events_by_name are only
-// ever computed at the MONTHLY level in fetch_data.py — Day mode's
-// snapshot (buildDaySnapshot in this file) never includes them at all, so
-// they come through as `undefined` (not just an empty array) when a day
-// is selected. That distinction is exactly what "unavailable in Day mode"
-// vs. "genuinely zero rows" hinges on below.
+// device_users/operating_systems/page_titles are only ever computed at the
+// MONTHLY level in fetch_data.py — Day mode's snapshot (buildDaySnapshot in
+// this file) never includes them at all, so they come through as
+// `undefined` (not just an empty array) when a day is selected. That
+// distinction is exactly what "unavailable in Day mode" vs. "genuinely zero
+// rows" hinges on below.
+// key_events_by_name is the ONE exception: fetch_data.py's daily_detail
+// block also computes it per day (via ga4_daily_breakdown), so it's
+// available in Day mode too, for any day within the DAILY_DETAIL_MONTHS
+// window — see dayModeSupported below.
 // The SAME undefined value (a field simply missing from curr) can mean two
 // completely different things, which look identical to the code but need
 // different messages for a person reading them:
-//   1. Genuinely Day mode — these GA4 breakdowns are only ever computed
-//      monthly in fetch_data.py, so no amount of re-fetching adds them to
-//      a day snapshot. This is architectural, not a data gap.
-//   2. Month or Quarter mode, but this specific period predates when the
-//      field was added to fetch_data.py, and hasn't been backfilled since
-//      (see FULL_REFRESH in fetch_data.py / PROJECT_NOTES.md section 2f).
-//      This IS fixable — a full_refresh run backfills it.
+//   1. Genuinely Day mode, for a field that ISN'T dayModeSupported — these
+//      GA4 breakdowns are only ever computed monthly in fetch_data.py, so no
+//      amount of re-fetching adds them to a day snapshot. This is
+//      architectural, not a data gap.
+//   2. Month/Quarter mode (any field), OR Day mode for a dayModeSupported
+//      field (currently just Key Events) — this specific period predates
+//      when the field was added to fetch_data.py, and hasn't been
+//      backfilled since (see FULL_REFRESH in fetch_data.py /
+//      PROJECT_NOTES.md section 2f). This IS fixable — a full_refresh run
+//      backfills it (Key Events also self-heals on the very next normal
+//      daily run, since it's inside the always-refetched daily-detail window).
 // Checking the live #compare-mode value (not just "was curr built by
 // buildDaySnapshot") is what lets this tell the two apart correctly.
-function unavailableMessage(thingLabel) {
+function unavailableMessage(thingLabel, dayModeSupported = false) {
   const mode = document.getElementById("compare-mode").value;
-  if (mode === "day") {
+  if (mode === "day" && !dayModeSupported) {
     return `This data isn't available in Day mode — GA4 ${thingLabel} breakdowns are only computed at the monthly level, not daily. Switch to Month or Quarter mode to see this.`;
   }
   return `This period's archived data predates when ${thingLabel} tracking was added, so it hasn't been backfilled yet. Run a full refresh (Actions tab → Run workflow → tick "full_refresh") to fill it in, or pick a more recent period.`;
@@ -1203,7 +1220,11 @@ const keyEventColumns = [
 function renderKeyEventsByName(curr) {
   const container = document.getElementById("key-events-table");
   if (curr.key_events_by_name === undefined) {
-    container.innerHTML = `<div class="chart-unavailable">${unavailableMessage("key event")}</div>`;
+    // dayModeSupported=true — Key Events now has a Day-mode version (unlike
+    // Page Title & Screen / Device & Audience below), so a missing value in
+    // Day mode means "not backfilled yet for this specific day", not "Day
+    // mode can never show this".
+    container.innerHTML = `<div class="chart-unavailable">${unavailableMessage("key event", true)}</div>`;
     return;
   }
   createInteractiveTable(container, keyEventColumns, curr.key_events_by_name, {
@@ -1867,7 +1888,9 @@ const PERSONA = {
         { label: "Desktop", pct: 43.3 },
         { label: "Tablet", pct: 0.8 },
       ],
-      funnel: null, // no conversion funnel configured for DLSM — see funnel_stages in fetch_data.py
+      funnel: null, // DLSM funnel_stages added to fetch_data.py from Sep 2026 onward — this
+                    // field just isn't rendered by renderPersona() regardless (see Anzo's
+                    // Q2 2026 entry above); update once Sep/Q3 data exists to review
     },
     {
       periodLabel: "Q1 2026",
