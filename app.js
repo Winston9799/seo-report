@@ -786,6 +786,24 @@ function renderTrendChart(currSeries, currLabel, compSeries, compLabel) {
   const currDates = labels.map((_, i) => (currSeries[i] ? currSeries[i].date : null));
   const compDates = labels.map((_, i) => (compSeries[i] ? compSeries[i].date : null));
 
+  // pointRadius is 0 by default (clean line, no dots) — but a value with no
+  // non-null NEIGHBOR on either side has no line segment to draw at all, so
+  // it would otherwise be completely invisible (e.g. a brand-new month that
+  // only has its first day's data so far, thanks to the ~3-day GSC lag —
+  // see GSC_LAG_DAYS in fetch_data.py). Give isolated points a small radius
+  // so they show up as a dot instead of vanishing; every normal point that's
+  // part of a real line segment still gets radius 0, unchanged.
+  function pointRadiusForIsolated(values) {
+    return (context) => {
+      const i = context.dataIndex;
+      const v = values[i];
+      if (v === null || v === undefined) return 0;
+      const prevIsNull = values[i - 1] === null || values[i - 1] === undefined;
+      const nextIsNull = values[i + 1] === null || values[i + 1] === undefined;
+      return prevIsNull && nextIsNull ? 4 : 0;
+    };
+  }
+
   // Read the live brand accent color so the chart's current-period line
   // always matches whichever brand is selected, without hardcoding a color.
   const accent = cssVar("--accent");
@@ -802,7 +820,7 @@ function renderTrendChart(currSeries, currLabel, compSeries, compLabel) {
         borderColor: accent,
         backgroundColor: accent,
         borderWidth: 2,
-        pointRadius: 0,
+        pointRadius: pointRadiusForIsolated(currValues),
         tension: 0.25,
       },
       {
@@ -813,7 +831,7 @@ function renderTrendChart(currSeries, currLabel, compSeries, compLabel) {
         backgroundColor: muted,
         borderWidth: 2,
         borderDash: [4, 3],   // dashed line distinguishes the comparison period even in black & white
-        pointRadius: 0,
+        pointRadius: pointRadiusForIsolated(compValues),
         tension: 0.25,
       },
     ],
