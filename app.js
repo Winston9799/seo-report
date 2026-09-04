@@ -214,14 +214,20 @@ function indexBy(rows, key) {
 // this month) get a previous value of 0. Used for the Branded/Non-branded
 // keyword tables, Top Pages, and Top Countries — anywhere the current
 // period's top-N list is the source of truth and we just need deltas added.
-function withDelta(currRows, compRows, key) {
+// metricKey defaults to "clicks" so every existing caller (Branded Keywords,
+// Pages by Category, Top Countries) gets the exact same clicks_previous/
+// clicks_change_pct field names as before, unchanged. Callers with a
+// different metric (e.g. Key Events, Page Title & Screen use "keyEvents"/
+// "screenPageViews") get that metric's own <metricKey>_previous/
+// <metricKey>_change_pct fields instead.
+function withDelta(currRows, compRows, key, metricKey = "clicks") {
   const compMap = indexBy(compRows, key);
   return currRows.map(r => {
-    const c = compMap[r[key]] || { clicks: 0 };
+    const c = compMap[r[key]] || { [metricKey]: 0 };
     return {
       ...r,
-      clicks_previous: c.clicks,
-      clicks_change_pct: pctChange(r.clicks, c.clicks),
+      [`${metricKey}_previous`]: c[metricKey],
+      [`${metricKey}_change_pct`]: pctChange(r[metricKey], c[metricKey]),
     };
   });
 }
@@ -386,6 +392,28 @@ function buildDaySnapshot(dateStr) {
     pages: detail.pages,
     countries: detail.countries,
     devices: detail.devices,
+    // Deliberately NOT defaulted to [] — stays undefined for a day whose
+    // archived detail predates this field (same "not backfilled yet" signal
+    // unavailableMessage() already relies on), and becomes a real array
+    // (possibly empty) once fetch_data.py has recomputed it. Unlike
+    // page_titles/operating_systems/device_users, this one self-heals within
+    // a day of shipping — it's built inside the same daily_detail block that
+    // already gets refetched every day for the whole DAILY_DETAIL_MONTHS
+    // window, no full_refresh required.
+    key_events_by_name: detail.key_events_by_name,
+    // Same undefined-preserving treatment — Page Title & Screen, Operating
+    // System, and Device Category all now have real Day-mode data too (see
+    // ga4_daily_breakdown() in fetch_data.py), sharing the exact same
+    // "undefined = not backfilled yet, real array = computed" contract as
+    // key_events_by_name and funnel above.
+    page_titles: detail.page_titles,
+    operating_systems: detail.operating_systems,
+    device_users: detail.device_users,
+    // Same undefined-preserving treatment as key_events_by_name above — a
+    // day whose archived detail predates this field just won't have
+    // "funnel" in it, and renderFunnel() already treats undefined the same
+    // as [] (hides the section), so no special-casing needed there.
+    funnel: detail.funnel,
     ga4: {
       sessions: dayTotals.sessions,
       engagedSessions: dayTotals.engagedSessions,
@@ -1116,27 +1144,33 @@ function drawDonutChart(existingChart, canvasId, legendId, rows, metricKey, labe
 // Device Category supports a New Users / Active Users toggle (the <select>
 // next to its heading); Operating System only ever shows Active Users,
 // matching what was asked for.
-// device_users/operating_systems/page_titles/key_events_by_name are only
-// ever computed at the MONTHLY level in fetch_data.py — Day mode's
-// snapshot (buildDaySnapshot in this file) never includes them at all, so
-// they come through as `undefined` (not just an empty array) when a day
-// is selected. That distinction is exactly what "unavailable in Day mode"
-// vs. "genuinely zero rows" hinges on below.
-// The SAME undefined value (a field simply missing from curr) can mean two
-// completely different things, which look identical to the code but need
-// different messages for a person reading them:
-//   1. Genuinely Day mode — these GA4 breakdowns are only ever computed
-//      monthly in fetch_data.py, so no amount of re-fetching adds them to
-//      a day snapshot. This is architectural, not a data gap.
-//   2. Month or Quarter mode, but this specific period predates when the
-//      field was added to fetch_data.py, and hasn't been backfilled since
-//      (see FULL_REFRESH in fetch_data.py / PROJECT_NOTES.md section 2f).
-//      This IS fixable — a full_refresh run backfills it.
+// device_users/operating_systems/page_titles/key_events_by_name are all
+// computed at the monthly level in fetch_data.py (unconditionally, every
+// month) AND, as of the daily_detail rework, at the daily level too — via
+// ga4_daily_breakdown(), for any day within the DAILY_DETAIL_MONTHS window.
+// So `undefined` on one of these fields no longer means "Day mode can never
+// show this" the way it used to for three of these four — it now only ever
+// means "this specific archived period predates when the field/day-level
+// version was added, and hasn't been backfilled/re-fetched since":
+//   - Month/Quarter mode: the month's JSON was written by an older version
+//     of fetch_data.py that didn't compute this field yet. Fixable with a
+//     full_refresh run (Actions tab → Run workflow → tick "full_refresh").
+//   - Day mode: this exact day's daily_detail predates when its daily
+//     version was added. Self-heals on the very next normal daily run,
+//     since it's inside the always-refetched daily-detail window — no
+//     full_refresh needed specifically for this.
+// The dayModeSupported parameter below exists for the (currently
+// hypothetical) case of a future GA4 breakdown that's monthly-only with no
+// daily equivalent at all — pass false (the default) for that, true for
+// anything ga4_daily_breakdown() has a per-day version of, which as of now
+// is all four of these fields.
 // Checking the live #compare-mode value (not just "was curr built by
-// buildDaySnapshot") is what lets this tell the two apart correctly.
-function unavailableMessage(thingLabel) {
+// buildDaySnapshot") is what lets Month/Quarter-mode staleness and Day-mode
+// staleness get worded correctly for whichever mode the person is actually
+// looking at.
+function unavailableMessage(thingLabel, dayModeSupported = false) {
   const mode = document.getElementById("compare-mode").value;
-  if (mode === "day") {
+  if (mode === "day" && !dayModeSupported) {
     return `This data isn't available in Day mode — GA4 ${thingLabel} breakdowns are only computed at the monthly level, not daily. Switch to Month or Quarter mode to see this.`;
   }
   return `This period's archived data predates when ${thingLabel} tracking was added, so it hasn't been backfilled yet. Run a full refresh (Actions tab → Run workflow → tick "full_refresh") to fill it in, or pick a more recent period.`;
@@ -1149,7 +1183,7 @@ function renderDeviceUsersChart(curr) {
   if (curr.device_users === undefined) {
     canvas.style.display = "none";
     legend.style.display = "none";
-    placeholder.textContent = unavailableMessage("device");
+    placeholder.textContent = unavailableMessage("device", true);
     placeholder.style.display = "";
     return;
   }
@@ -1167,7 +1201,7 @@ function renderOsChart(curr) {
   if (curr.operating_systems === undefined) {
     canvas.style.display = "none";
     legend.style.display = "none";
-    placeholder.textContent = unavailableMessage("operating system");
+    placeholder.textContent = unavailableMessage("operating system", true);
     placeholder.style.display = "";
     return;
   }
@@ -1183,15 +1217,19 @@ function renderOsChart(curr) {
 const pageTitleColumns = [
   { key: "label", label: "Page title", wrap: true, format: escapeHtml },
   { key: "screenPageViews", label: "Views", align: "num", format: fmtNum },
+  { key: "screenPageViews_change_pct", label: "Δ", align: "num", format: fmtDelta },
   { key: "keyEvents", label: "Key events", align: "num", format: fmtNum },
 ];
-function renderPageTitles(curr) {
+function renderPageTitles(curr, comp) {
   const container = document.getElementById("page-titles-table");
   if (curr.page_titles === undefined) {
-    container.innerHTML = `<div class="chart-unavailable">${unavailableMessage("page-title")}</div>`;
+    // dayModeSupported=true — Page Title & Screen now has a Day-mode
+    // version (see ga4_daily_breakdown() in fetch_data.py)
+    container.innerHTML = `<div class="chart-unavailable">${unavailableMessage("page-title", true)}</div>`;
     return;
   }
-  createInteractiveTable(container, pageTitleColumns, curr.page_titles, {
+  const rows = withDelta(curr.page_titles, comp.page_titles || [], "label", "screenPageViews");
+  createInteractiveTable(container, pageTitleColumns, rows, {
     searchKey: "label", defaultSortKey: "screenPageViews", defaultSortDir: "desc",
   });
 }
@@ -1199,14 +1237,18 @@ function renderPageTitles(curr) {
 const keyEventColumns = [
   { key: "label", label: "Event name", wrap: true, format: escapeHtml },
   { key: "keyEvents", label: "Key events", align: "num", format: fmtNum },
+  { key: "keyEvents_change_pct", label: "Δ", align: "num", format: fmtDelta },
 ];
-function renderKeyEventsByName(curr) {
+function renderKeyEventsByName(curr, comp) {
   const container = document.getElementById("key-events-table");
   if (curr.key_events_by_name === undefined) {
-    container.innerHTML = `<div class="chart-unavailable">${unavailableMessage("key event")}</div>`;
+    // dayModeSupported=true — Key Events has a Day-mode version, same as
+    // Page Title & Screen and the two Device & Audience GA4 donuts now do.
+    container.innerHTML = `<div class="chart-unavailable">${unavailableMessage("key event", true)}</div>`;
     return;
   }
-  createInteractiveTable(container, keyEventColumns, curr.key_events_by_name, {
+  const rows = withDelta(curr.key_events_by_name, comp.key_events_by_name || [], "label", "keyEvents");
+  createInteractiveTable(container, keyEventColumns, rows, {
     searchKey: "label", defaultSortKey: "keyEvents", defaultSortDir: "desc",
   });
 }
@@ -1618,8 +1660,8 @@ function renderAll() {
   renderSummary(curr, comp);
   renderDeviceUsersChart(curr);
   renderOsChart(curr);
-  renderPageTitles(curr);
-  renderKeyEventsByName(curr);
+  renderPageTitles(curr, comp);
+  renderKeyEventsByName(curr, comp);
   renderFunnel(curr, comp);
   renderSplit(curr);
   renderPositionDistribution(curr);
@@ -1867,7 +1909,9 @@ const PERSONA = {
         { label: "Desktop", pct: 43.3 },
         { label: "Tablet", pct: 0.8 },
       ],
-      funnel: null, // no conversion funnel configured for DLSM — see funnel_stages in fetch_data.py
+      funnel: null, // DLSM funnel_stages added to fetch_data.py from Sep 2026 onward — this
+                    // field just isn't rendered by renderPersona() regardless (see Anzo's
+                    // Q2 2026 entry above); update once Sep/Q3 data exists to review
     },
     {
       periodLabel: "Q1 2026",
