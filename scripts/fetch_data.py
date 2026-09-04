@@ -63,6 +63,12 @@ BRANDS = [
         "ga4_property_id": "474006416",
         "gsc_site_url": "sc-domain:dlsm.com",
         "brand_keywords": ["dlsm"],
+        # DLSM conversion funnel — exact GA4 event names, case-sensitive.
+        # These events were only wired up starting 2026-09-01; any month
+        # before that will correctly show 0 for every stage (see
+        # event_count_lookup.get(name, 0) in build_month_snapshot below) —
+        # that's real, not a bug, so don't be alarmed by zeros in Jul/Aug 2026.
+        "funnel_stages": ["CRM_Reg_Start", "CRM_Reg_Finish", "CRM_Verified", "CRM_FTD"],
     },
 ]
 
@@ -403,6 +409,55 @@ def ga4_daily_totals(client, property_id, start, end, exclude_hostnames=None):
     return by_date
 
 
+def ga4_daily_breakdown(client, property_id, start, end, dimension_name, metric_names, exclude_hostnames=None, top_n=None, sort_metric=None):
+    """Like ga4_breakdown() above, but broken out by day as well — e.g. gives
+    per-day eventName/pageTitle/deviceCategory/operatingSystem counts instead
+    of one whole-period total. Powers the Day-mode version of Key Events,
+    Conversion Funnel, Page Title & Screen, Operating System, and Device
+    Category — all four of fetch_data.py's GA4 breakdowns now have a daily
+    equivalent via this one function. Same organic-only, excluded-country/
+    hostname filtering as every other GA4 pull in this file.
+    top_n/sort_metric work like in ga4_breakdown() — applied PER DAY (each
+    day gets its own top N, not a top N across the whole date range) — and
+    are optional since Key Events/Funnel don't need a cap (event-name
+    cardinality is naturally small). Returns
+    {iso_date: [{"label": ..., <metric1>: ..., <metric2>: ...}, ...]}."""
+    exclude_hostnames = exclude_hostnames or []
+    request = RunReportRequest(
+        property=f"properties/{property_id}",
+        date_ranges=[DateRange(start_date=start.isoformat(), end_date=end.isoformat())],
+        dimensions=[
+            Dimension(name="date"), Dimension(name=dimension_name),
+            Dimension(name="country"), Dimension(name="hostName"), Dimension(name="sessionDefaultChannelGroup"),
+        ],
+        metrics=[Metric(name=m) for m in metric_names],
+    )
+    resp = client.run_report(request)
+    by_date = {}
+    for row in resp.rows:
+        if row.dimension_values[2].value in EXCLUDE_GA4_COUNTRIES:
+            continue
+        if row.dimension_values[3].value in exclude_hostnames:
+            continue
+        if row.dimension_values[4].value != GA4_ORGANIC_CHANNEL:
+            continue
+        raw_d = row.dimension_values[0].value  # GA4 returns "YYYYMMDD"
+        iso_d = f"{raw_d[0:4]}-{raw_d[4:6]}-{raw_d[6:8]}"  # reformat to match GSC's date format
+        key = row.dimension_values[1].value
+        day_totals = by_date.setdefault(iso_d, {})
+        entry = day_totals.setdefault(key, {"label": key, **{m: 0 for m in metric_names}})
+        for i, m in enumerate(metric_names):
+            entry[m] += int(row.metric_values[i].value)
+    result = {}
+    for d, vals in by_date.items():
+        rows = list(vals.values())
+        if top_n is not None:
+            rows.sort(key=lambda r: r[sort_metric or metric_names[-1]], reverse=True)
+            rows = rows[:top_n]
+        result[d] = rows
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Per-month snapshot
 # ---------------------------------------------------------------------------
@@ -428,6 +483,7 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
 
     exclude_page_regex = brand.get("exclude_page_regex")
     exclude_ga4_hostnames = brand.get("exclude_ga4_hostnames", [])
+    funnel_stage_names = brand.get("funnel_stages")
 
     # Ask for the "date" dimension too, but only for months inside the
     # daily-detail window — otherwise we'd be pulling (and paying the
@@ -493,9 +549,54 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
         daily_countries = group_by_date_then(qc, "country", TOP_N_DAILY_COUNTRIES)
         daily_devices = group_by_date_then(dc, "device", 10)
 
-        # Union of every date that shows up in any of the five breakdowns above
+        # Key Events, per day (Conversion Funnel below reuses this same
+        # pull). key_events_by_name keeps only events GA4 has flagged as a
+        # "key event" (keyEvents > 0), same distinction as the monthly
+        # version below. All four of fetch_data.py's GA4 breakdowns
+        # (Key Events, Page Title & Screen, Operating System, Device
+        # Category) now get a Day-mode version — see the three calls below
+        # this one.
+        daily_key_events_raw = ga4_daily_breakdown(
+            ga4_client, brand["ga4_property_id"], start, end, "eventName",
+            ["eventCount", "keyEvents"], exclude_hostnames=exclude_ga4_hostnames,
+        )
+        daily_key_events = {d: [r for r in rows if r["keyEvents"] > 0] for d, rows in daily_key_events_raw.items()}
+
+        # Conversion Funnel, per day — reuses the SAME daily_key_events_raw
+        # pull above rather than a third API call (it already has eventCount
+        # for every event name, per day; key_events_by_name just happened to
+        # filter that down to keyEvents > 0 only). Mirrors the monthly funnel
+        # logic exactly, just run once per date instead of once for the month.
+        daily_funnel = {}
+        if funnel_stage_names:
+            for d, rows in daily_key_events_raw.items():
+                event_count_lookup = {r["label"]: r["eventCount"] for r in rows}
+                daily_funnel[d] = [{"stage": name, "count": event_count_lookup.get(name, 0)} for name in funnel_stage_names]
+
+        # Page Title & Screen, Operating System, and Device Category, per day.
+        # Same three GA4 breakdowns build_month_snapshot already computes at
+        # the monthly level below (page_titles/operating_systems/
+        # device_users) — mirrored here per day so Day mode can show them
+        # too. Same top_n/sort_metric as their monthly counterparts, just
+        # applied within each individual day instead of the whole month.
+        daily_page_titles = ga4_daily_breakdown(
+            ga4_client, brand["ga4_property_id"], start, end, "pageTitle",
+            ["screenPageViews", "keyEvents"], exclude_hostnames=exclude_ga4_hostnames, top_n=30, sort_metric="screenPageViews",
+        )
+        daily_operating_systems = ga4_daily_breakdown(
+            ga4_client, brand["ga4_property_id"], start, end, "operatingSystem",
+            ["activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10,
+        )
+        daily_device_users = ga4_daily_breakdown(
+            ga4_client, brand["ga4_property_id"], start, end, "deviceCategory",
+            ["newUsers", "activeUsers"], exclude_hostnames=exclude_ga4_hostnames, top_n=10,
+        )
+
+        # Union of every date that shows up in any of the nine breakdowns above
         # (a date might have branded-keyword data but no device data that day, etc.)
-        all_dates = set(daily_branded) | set(daily_nonbranded) | set(daily_pages) | set(daily_countries) | set(daily_devices)
+        all_dates = (set(daily_branded) | set(daily_nonbranded) | set(daily_pages) |
+                     set(daily_countries) | set(daily_devices) | set(daily_key_events) |
+                     set(daily_page_titles) | set(daily_operating_systems) | set(daily_device_users))
         daily_detail = {}
         for d in all_dates:
             daily_detail[d] = {
@@ -504,6 +605,11 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
                 "pages": daily_pages.get(d, []),
                 "countries": daily_countries.get(d, []),
                 "devices": daily_devices.get(d, []),
+                "key_events_by_name": daily_key_events.get(d, []),
+                "funnel": daily_funnel.get(d, []),
+                "page_titles": daily_page_titles.get(d, []),
+                "operating_systems": daily_operating_systems.get(d, []),
+                "device_users": daily_device_users.get(d, []),
             }
 
     ga4 = ga4_totals(ga4_client, brand["ga4_property_id"], start, end, exclude_hostnames=exclude_ga4_hostnames)
@@ -515,12 +621,13 @@ def build_month_snapshot(brand, gsc_service, ga4_client, year, month, cutoff_dat
     )
     key_events_by_name = [r for r in key_events_raw if r["keyEvents"] > 0]  # drop events that aren't marked as key events (0 count)
 
-    # --- Funnel (Anzo only — see funnel_stages in BRANDS config) ---
+    # --- Funnel (whichever brands have funnel_stages set in BRANDS — both
+    # Anzo and DLSM as of Sep 2026; a brand with no funnel_stages key just
+    # gets funnel = []) ---
     # Reuses key_events_raw's eventCount rather than a separate API call —
     # eventCount (not keyEvents) is used here since a funnel stage should
     # count every time the event fired, not just the subset flagged as a
     # "key event" in GA4's settings.
-    funnel_stage_names = brand.get("funnel_stages")
     funnel = []
     if funnel_stage_names:
         event_count_lookup = {r["label"]: r["eventCount"] for r in key_events_raw}
