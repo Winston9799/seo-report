@@ -395,6 +395,11 @@ function buildDaySnapshot(dateStr) {
     // already gets refetched every day for the whole DAILY_DETAIL_MONTHS
     // window, no full_refresh required.
     key_events_by_name: detail.key_events_by_name,
+    // Same undefined-preserving treatment as key_events_by_name above — a
+    // day whose archived detail predates this field just won't have
+    // "funnel" in it, and renderFunnel() already treats undefined the same
+    // as [] (hides the section), so no special-casing needed there.
+    funnel: detail.funnel,
     ga4: {
       sessions: dayTotals.sessions,
       engagedSessions: dayTotals.engagedSessions,
